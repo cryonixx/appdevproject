@@ -7,12 +7,13 @@ export interface FolderData {
   id: string;
   name: string;
   color?: string;
+  // 👇 ADD THIS LINE so folders can be moved into other folders
+  folderId?: string | null; 
 }
 
 interface FolderProps {
   data: FolderData;
   onPress: (id: string) => void;
-  // 👇 1. ADD THIS PROP
   onLongPress: (folder: FolderData) => void; 
 }
 
@@ -29,9 +30,8 @@ export default function Folder({ data, onPress, onLongPress }: FolderProps) {
         { backgroundColor: 'transparent'} 
       ]}
       onPress={() => onPress(data.id)}
-      // 👇 2. CONNECT IT HERE
       onLongPress={() => onLongPress(data)}
-      delayLongPress={200} // Short delay for better feel
+      delayLongPress={200} 
       activeOpacity={0.7}
     >
       <Ionicons 

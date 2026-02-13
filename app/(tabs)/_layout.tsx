@@ -1,73 +1,80 @@
-import { Colors } from "@/constants/theme";
-import { useColorScheme } from "@/hooks/use-color-scheme";
-import { createMaterialTopTabNavigator } from "@react-navigation/material-top-tabs";
-import { withLayoutContext } from "expo-router";
-import React from 'react';
-import { View } from 'react-native';
+import React, { createContext, useContext, useState } from 'react';
 
-// Import custom components
-import AudioNotesHeader from '@/components/AudioNotesHeader';
-import PersistentSearchBar from '@/components/PersistentSearchBar';
 
-// 1. Create the Navigator Instance
-const { Navigator } = createMaterialTopTabNavigator();
+// Types
+export interface FileSystemItem {
+  id: string;
+  title: string; // or name for folders
+  type: 'file' | 'folder';
+  parentId: string | null; // null = root
+  // ... other props like date, duration, color
+  date?: string;
+  duration?: string;
+  isPinned?: boolean;
+  color?: string;
+}
 
-// 2. Wrap it with Expo Router context
-// This allows <MaterialTopTabs> to act as the Router
-export const MaterialTopTabs = withLayoutContext(Navigator);
+interface FileSystemContextType {
+  items: FileSystemItem[];
+  createFolder: (name: string, parentId: string | null) => void;
+  moveItems: (itemIds: Set<string>, targetFolderId: string | null) => void;
+  deleteItems: (itemIds: Set<string>) => void;
+  togglePin: (itemId: string) => void;
+  renameItem: (itemId: string, newName: string) => void;
+}
 
-export default function TopTabsLayout() {
-  const theme = useColorScheme() ?? 'light';
+const FileSystemContext = createContext<FileSystemContextType>({} as any);
+
+export function FileSystemProvider({ children }: { children: React.ReactNode }) {
+  // --- MOCK INITIAL DATA ---
+  const [items, setItems] = useState<FileSystemItem[]>([
+    { id: '1', title: 'AppDev', type: 'folder', parentId: null, color: '#666666' },
+    { id: '2', title: 'SoftEng', type: 'folder', parentId: null, color: '#2196F3' },
+    { id: '101', title: 'New Record', type: 'file', parentId: null, date: '01/31/26', duration: '20:00', isPinned: false },
+    { id: '104', title: 'AppDev Intro', type: 'file', parentId: '1', date: '02/05/26', duration: '15:00', isPinned: false },
+  ]);
+
+  // 1. Create Folder
+  const createFolder = (name: string, parentId: string | null) => {
+    const newFolder: FileSystemItem = {
+      id: Date.now().toString(),
+      title: name,
+      type: 'folder',
+      parentId: parentId, // ✅ This ensures it is created in the current page
+      color: '#888',
+    };
+    setItems(prev => [...prev, newFolder]);
+  };
+
+  // 2. Move Items (The Fix)
+  const moveItems = (itemIds: Set<string>, targetFolderId: string | null) => {
+    setItems(prev => prev.map(item => {
+      if (itemIds.has(item.id)) {
+        // prevent moving a folder into itself
+        if (item.id === targetFolderId) return item; 
+        return { ...item, parentId: targetFolderId };
+      }
+      return item;
+    }));
+  };
+
+  const deleteItems = (ids: Set<string>) => {
+    setItems(prev => prev.filter(i => !ids.has(i.id)));
+  };
+
+  const togglePin = (id: string) => {
+    setItems(prev => prev.map(i => i.id === id ? { ...i, isPinned: !i.isPinned } : i));
+  };
+
+  const renameItem = (id: string, newName: string) => {
+    setItems(prev => prev.map(i => i.id === id ? { ...i, title: newName } : i));
+  };
 
   return (
-    // Wrapper View for the whole screen
-    <View style={{ flex: 1, backgroundColor: Colors[theme].background }}>
-      
-      {/* The Tab Navigator 
-         IMPORTANT: We must ensure this takes up all available space (flex: 1)
-         so it doesn't get squashed by the search bar.
-      */}
-      <View style={{ flex: 1 }}>
-        <MaterialTopTabs
-          tabBar={(props) => <AudioNotesHeader {...props} />}
-          screenOptions={{
-            tabBarActiveTintColor: Colors[theme].tint,
-            tabBarInactiveTintColor: Colors[theme].tabIconDefault,
-            swipeEnabled: false,
-            tabBarItemStyle: {
-              width: 'auto', 
-              justifyContent: 'flex-start',
-              paddingLeft: 15,
-            },
-            tabBarIndicatorStyle: {
-              backgroundColor: Colors[theme].background,
-              height: 1,
-            },
-            tabBarStyle: {
-              backgroundColor: Colors[theme].background,
-              elevation: 0,
-              shadowOpacity: 0,
-              paddingTop: 30,
-              borderBottomWidth: 3, 
-              borderBottomColor: Colors[theme].bordercolorSelected,
-            },
-            tabBarLabelStyle: {
-              textTransform: 'none',
-              fontWeight: 'bold',
-              fontSize: 40,
-            },
-          }}
-        >
-          {/* This name="index" MUST match a file named "index.tsx" 
-             in the same folder as this _layout.tsx 
-          */}
-          <MaterialTopTabs.Screen name="index" options={{ title: 'Audio Notes' }} />
-        </MaterialTopTabs>
-      </View>
-
-      {/* Persistent Footer */}
-      <PersistentSearchBar />
-      
-    </View>
+    <FileSystemContext.Provider value={{ items, createFolder, moveItems, deleteItems, togglePin, renameItem }}>
+      {children}
+    </FileSystemContext.Provider>
   );
 }
+
+export const useFileSystem = () => useContext(FileSystemContext);

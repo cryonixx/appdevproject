@@ -1,110 +1,94 @@
-import React, { useEffect, useState } from 'react';
-import { Alert, FlatList, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, useColorScheme, View } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import { Alert, FlatList, Modal, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, useColorScheme, View } from 'react-native';
 
 // --- IMPORTS ---
 import { EventBus } from '@/constants/eventsBus';
 import { Colors } from "@/constants/theme";
+import { useFocusEffect } from '@react-navigation/native';
 
-// ✅ Keep these imports (assuming they are working)
+
+// ✅ CUSTOM COMPONENTS
 import ActionModal from '@/components/ActionModal';
 import AudioFile from '@/components/AudioFileItem';
 import Folder, { FolderData } from '@/components/folder';
+import { useRouter } from 'expo-router';
+// ✅ Ensure this is imported
+import MoveFileModal from '@/components/MoveFileModal';
 
-// ❌ REMOVED: import OptionsModal (We define it below to prevent the crash)
+// ✅ IMPORT CONTEXT
+import { useFileSystem } from '@/contexts/FileSystemContext';
 
 // --- TYPES ---
 interface RecordingFile {
-  id: string; title: string; date: string; duration: string; isPinned: boolean;
+  id: string; title: string; date: string; duration: string; isPinned: boolean; folderId?: string | null;
+}
+interface ExtendedFolderData extends FolderData {
+    folderId?: string | null;
 }
 
 export default function HomeScreen() {
+  const router = useRouter();
   const colorScheme = useColorScheme() ?? 'light';
   const themeColors = Colors[colorScheme] || Colors.light;
+  const [isCreating, setIsCreating] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      const unsubscribe = EventBus.onOpenSettings(() => {
+        setOptionsModalVisible(true);
+      });
+      return () => {
+        unsubscribe();
+      };
+    }, [])
+  );
+  const [modalMode, setModalMode] = useState<'menu' | 'rename'>('menu');
 
   // --- DATA ---
-  const [folders, setFolders] = useState<FolderData[]>([
-    { id: '1', name: 'AppDev', color: '#666666' },
-    { id: '2', name: 'SoftEng', color: '#2196F3' },
-  ]);
-
-  const [files, setFiles] = useState<RecordingFile[]>([
-    { id: '101', title: 'New Record', date: '01/31/26 12:34', duration: '20:00', isPinned: false },
-    { id: '102', title: 'Lecture Notes', date: '01/30/26 09:15', duration: '45:30', isPinned: false },
-    { id: '103', title: 'Important Exam', date: '02/01/26 10:00', duration: '50:00', isPinned: true },
-  ]);
+  const { items, createFolder, moveItems, deleteItems, togglePin, renameItem } = useFileSystem();
 
   // --- UI STATES ---
   const [actionModalVisible, setActionModalVisible] = useState(false);
   const [optionsModalVisible, setOptionsModalVisible] = useState(false);
-  
+  const [moveModalVisible, setMoveModalVisible] = useState(false);
+
+  // --- SELECTION ---
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   // --- TARGETS ---
   const [targetFile, setTargetFile] = useState<RecordingFile | null>(null);
-  const [targetFolder, setTargetFolder] = useState<FolderData | null>(null);
+  const [targetFolder, setTargetFolder] = useState<ExtendedFolderData | null>(null);
 
-  // 1. EVENT LISTENER
-  useEffect(() => {
-    const unsubscribe = EventBus.onOpenSettings(() => {
-      setOptionsModalVisible(true);
-    });
-    return unsubscribe;
-  }, []);
+  // --- FILTERING (Root Level) ---
+  const rootFolders: ExtendedFolderData[] = items
+    .filter(i => i.type === 'folder' && i.parentId === null)
+    .map(i => ({ 
+        id: i.id, 
+        name: i.title, 
+        color: i.color || '#666', 
+        folderId: i.parentId 
+    }));
 
-  // 2. HANDLERS
-  const handleItemPress = (id: string, type: 'file' | 'folder') => {
-    if (isSelectionMode) {
-      const newSet = new Set(selectedIds);
-      if (newSet.has(id)) newSet.delete(id);
-      else newSet.add(id);
-      setSelectedIds(newSet);
-    } else {
-      console.log(`Opening ${type} ${id}`);
-    }
-  };
+  const rootFiles: RecordingFile[] = items
+    .filter(i => i.type === 'file' && i.parentId === null)
+    .map(i => ({
+        id: i.id,
+        title: i.title,
+        date: i.date,
+        duration: i.duration,
+        isPinned: i.isPinned,
+        folderId: i.parentId
+    }));
+  
+  const pinnedFiles = items
+    .filter(i => i.type === 'file' && i.isPinned) 
+    .filter(i => i.parentId === null) 
+    .map(i => ({ id: i.id, title: i.title, date: i.date, duration: i.duration, isPinned: i.isPinned, folderId: i.parentId }));
 
-  const handleLongPress = (item: any, type: 'file' | 'folder') => {
-    if (isSelectionMode) return;
-    if (type === 'file') {
-      setTargetFile(item);
-      setTargetFolder(null);
-    } else {
-      setTargetFolder(item);
-      setTargetFile(null);
-    }
-    setActionModalVisible(true);
-  };
+  const recentFiles = rootFiles.filter(f => !f.isPinned);
 
-  // 3. ACTIONS
-  const handleCreateFolder = () => {
-    setOptionsModalVisible(false);
-    const newId = Date.now().toString();
-    const newFolder = { id: newId, name: 'Untitled Folder', color: '#888' };
-    setFolders(prev => [...prev, newFolder]);
-    setTimeout(() => {
-      setTargetFolder(newFolder);
-      setTargetFile(null);
-      setActionModalVisible(true);
-    }, 100);
-  };
-
-  const handleBatchDelete = () => {
-    Alert.alert("Delete Items", `Delete ${selectedIds.size} items?`, [
-      { text: "Cancel", style: "cancel" },
-      { 
-        text: "Delete", 
-        style: 'destructive', 
-        onPress: () => {
-          setFiles(prev => prev.filter(f => !selectedIds.has(f.id)));
-          setFolders(prev => prev.filter(f => !selectedIds.has(f.id)));
-          setIsSelectionMode(false);
-          setSelectedIds(new Set());
-        }
-      }
-    ]);
-  };
-
+  // --- RENDER HELPER ---
   const renderSelectable = (component: React.ReactNode, id: string) => {
     const isSelected = selectedIds.has(id);
     return (
@@ -119,18 +103,135 @@ export default function HomeScreen() {
     );
   };
 
+  // --- HANDLERS ---
+  const handleItemPress = (id: string, type: 'file' | 'folder') => {
+    if (isSelectionMode) {
+      const newSet = new Set(selectedIds);
+      if (newSet.has(id)) newSet.delete(id);
+      else newSet.add(id);
+      setSelectedIds(newSet);
+    } else {
+      if (type === 'folder') {
+        router.push(`/folder/${id}`)
+      } else {
+        console.log(`Playing file ${id}`);
+      }
+    }
+  };  
+
+  const handleLongPress = (item: any, type: 'file' | 'folder') => {
+    if (isSelectionMode) return;
+    if (type === 'file') {
+      setTargetFile(item);
+      setTargetFolder(null);
+    } else {
+      setTargetFolder(item);
+      setTargetFile(null);
+    }
+    setModalMode('menu'); 
+    setActionModalVisible(true);
+  };
+
+  // --- ACTIONS ---
+
+  const handleOpenMove = () => {
+     if (targetFile || targetFolder) {
+        setActionModalVisible(false);
+        setTimeout(() => setMoveModalVisible(true), 300);
+     }
+     else if (isSelectionMode && selectedIds.size > 0) {
+        setMoveModalVisible(true);
+     }
+  };
+
+  const executeMove = (targetFolderId: string | null) => {
+    let idsToMove = new Set<string>();
+    
+    if (isSelectionMode) {
+        idsToMove = selectedIds;
+    } else {
+        if (targetFile) idsToMove.add(targetFile.id);
+        if (targetFolder) idsToMove.add(targetFolder.id);
+    }
+
+    moveItems(idsToMove, targetFolderId);
+
+    setMoveModalVisible(false);
+    setIsSelectionMode(false);
+    setSelectedIds(new Set());
+    setTargetFile(null);
+    setTargetFolder(null);
+  };
+
+  const handleCreateFolder = () => {
+    setOptionsModalVisible(false);
+    setTargetFolder(null);
+    setTargetFile(null);
+    setIsCreating(true); 
+    setModalMode('rename'); 
+    setTimeout(() => {
+      setActionModalVisible(true);
+    }, 500);
+  };
+  
+  const handleBatchDelete = () => {
+  // ✅ 1. Clone the Set to prevent passing a raw state reference
+  const idsToDelete = new Set(selectedIds);
+
+  const executeDelete = () => {
+    deleteItems(idsToDelete);
+    setIsSelectionMode(false);
+    setSelectedIds(new Set());
+  };
+
+  // ✅ 2. Handle Expo Web's inability to process Alert.alert button callbacks
+  if (Platform.OS === 'web') {
+    const confirmed = window.confirm(`Delete ${selectedIds.size} items?`);
+    if (confirmed) executeDelete();
+    return;
+  }
+
+  // Native Alert for iOS/Android
+  Alert.alert("Delete Items", `Delete ${selectedIds.size} items?`, [
+    { text: "Cancel", style: "cancel" },
+    {
+      text: "Delete",
+      style: 'destructive',
+      onPress: executeDelete
+    }
+  ]);
+};
+
+  // ✅ FIX 1: Helper to get the correct set of items being moved
+  // This solves the TypeScript "undefined" error and Logic error
+  const getMovingItems = () => {
+    if (isSelectionMode) return selectedIds;
+    const id = targetFile?.id || targetFolder?.id;
+    return id ? new Set([id]) : new Set<string>();
+  };
+
+  // ✅ FIX 2: Prepare folders list (excluding the ones being moved)
+  const availableFolders = items
+    .filter(i => i.type === 'folder' && !getMovingItems().has(i.id))
+    .map(f => ({
+        id: f.id,
+        name: f.title,
+        folderId: f.parentId
+    }));
+
   return (
     <View style={{ flex: 1, backgroundColor: themeColors.background }}>
       <ScrollView contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
         
-        {/* FOLDERS */}
+        {/* FOLDERS (Root) */}
         <Text style={[styles.sectionTitle, { color: themeColors.text, marginTop: 20 }]}>Folders</Text>
         <FlatList
-          data={folders}
+          data={rootFolders} 
           keyExtractor={item => item.id}
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: 22, gap: 15 }}
+          contentContainerStyle={{ paddingLeft: 22, paddingRight: 30, paddingTop: 10, gap: 15 }}
+          extraData={selectedIds}
           renderItem={({ item }) => renderSelectable(
             <Folder 
               data={item} 
@@ -140,63 +241,89 @@ export default function HomeScreen() {
           )}
         />
 
-        {/* PINNED */}
+        {/* PINNED (Root) */}
         <Text style={[styles.sectionTitle, { color: themeColors.text }]}>Pinned</Text>
         <View style={styles.listContainer}>
-          {files.filter(f => f.isPinned).map(file => (
+          {pinnedFiles.length === 0 && <Text style={{marginLeft: 22, color: '#999'}}>No pinned files</Text>}
+          {pinnedFiles.map(file => (
             <View key={file.id}>
-              {renderSelectable(
-                <AudioFile 
-                  {...file} 
-                  onPress={() => handleItemPress(file.id, 'file')}
-                  onLongPress={() => handleLongPress(file, 'file')}
-                />, file.id
-              )}
+                {renderSelectable(
+                    <AudioFile 
+                        {...file} 
+                        onPress={() => handleItemPress(file.id, 'file')} 
+                        onLongPress={() => handleLongPress(file, 'file')} 
+                    />, file.id
+                )}
             </View>
           ))}
         </View>
 
-        {/* RECENT */}
+        {/* RECENT (Root) */}
         <Text style={[styles.sectionTitle, { color: themeColors.text, marginTop: 25 }]}>Recent</Text>
         <View style={styles.listContainer}>
-          {files.filter(f => !f.isPinned).map(file => (
-            <View key={file.id}>
-              {renderSelectable(
-                <AudioFile 
-                  {...file} 
-                  onPress={() => handleItemPress(file.id, 'file')}
-                  onLongPress={() => handleLongPress(file, 'file')}
-                />, file.id
-              )}
+          {recentFiles.length === 0 && <Text style={{marginLeft: 22, color: '#999'}}>No recent files</Text>}
+          {recentFiles.map(file => (
+             <View key={file.id}>
+                {renderSelectable(
+                    <AudioFile 
+                        {...file} 
+                        onPress={() => handleItemPress(file.id, 'file')} 
+                        onLongPress={() => handleLongPress(file, 'file')} 
+                    />, file.id
+                )}
             </View>
           ))}
         </View>
+
       </ScrollView>
 
-      {/* MODALS */}
       <ActionModal 
         visible={actionModalVisible}
-        onClose={() => setActionModalVisible(false)}
-        title={targetFile ? targetFile.title : targetFolder?.name || ''}
+        onClose={() => {
+            setActionModalVisible(false);
+            setIsCreating(false); 
+        }}
+        initialMode={modalMode}
+        title={isCreating ? '' : (targetFile ? targetFile.title : targetFolder?.name || '')}
+        type={(targetFile || (!isCreating && !targetFolder)) ? 'file' : 'folder'} 
         isPinned={targetFile?.isPinned}
-        type={targetFile ? 'file' : targetFolder ? 'folder' : null}
+        currentColor={targetFolder?.color}
+        
+        onMove={handleOpenMove} 
+
         onDelete={() => {
-            if(targetFile) setFiles(prev => prev.filter(f => f.id !== targetFile.id));
-            if(targetFolder) setFolders(prev => prev.filter(f => f.id !== targetFolder.id));
+            const id = targetFile?.id || targetFolder?.id;
+            if (id) deleteItems(new Set([id]));
             setActionModalVisible(false);
         }}
-        onRename={(newName) => {
-            if(targetFile) setFiles(prev => prev.map(f => f.id === targetFile.id ? {...f, title: newName} : f));
-            if(targetFolder) setFolders(prev => prev.map(f => f.id === targetFolder.id ? {...f, name: newName} : f));
+        
+        onRename={(newName, newColor) => {
+            const wasCreating = isCreating;
+            const targetId = targetFile?.id || targetFolder?.id;
+
             setActionModalVisible(false);
+            setIsCreating(false);
+
+            setTimeout(() => {
+                if (wasCreating) {
+                   const newId = createFolder(newName, null);
+                   if (newColor && newId) {
+                       renameItem(newId, newName, newColor);
+                   }
+                } else {
+                   if (targetId) {
+                       renameItem(targetId, newName, newColor);
+                   }
+                }
+            }, 100);
         }}
+        
         onTogglePin={() => {
-            if(targetFile) setFiles(prev => prev.map(f => f.id === targetFile.id ? {...f, isPinned: !f.isPinned} : f));
+            if(targetFile) togglePin(targetFile.id);
             setActionModalVisible(false);
         }}
       />
 
-      {/* 👇 USING THE INTERNAL COMPONENT (No Imports = No Crash) */}
       <OptionsModal 
         visible={optionsModalVisible}
         onClose={() => setOptionsModalVisible(false)}
@@ -208,16 +335,32 @@ export default function HomeScreen() {
         }}
       />
 
-      {/* BATCH ACTION BAR */}
+      {/* ✅ FIX 3: Added MoveFileModal Component here */}
+      <MoveFileModal 
+        visible={moveModalVisible}
+        onClose={() => setMoveModalVisible(false)}
+        folders={availableFolders}
+        onSelectFolder={executeMove}
+        movingItems={getMovingItems()}
+      />
+        
       {isSelectionMode && (
         <View style={[styles.batchBar, { backgroundColor: themeColors.container, borderTopColor: themeColors.bordercolorSelected }]}>
           <TouchableOpacity onPress={() => { setIsSelectionMode(false); setSelectedIds(new Set()); }}>
             <Text style={{ fontSize: 16, color: themeColors.text }}>Cancel</Text>
           </TouchableOpacity>
+          
           <Text style={{ fontWeight: 'bold', color: themeColors.text }}>{selectedIds.size} Selected</Text>
-          <TouchableOpacity onPress={handleBatchDelete} disabled={selectedIds.size === 0}>
-             <Text style={{ fontSize: 16, color: 'red', opacity: selectedIds.size === 0 ? 0.3 : 1 }}>Delete ({selectedIds.size})</Text>
-          </TouchableOpacity>
+          
+          <View style={{ flexDirection: 'row', gap: 20 }}>
+             <TouchableOpacity onPress={handleOpenMove} disabled={selectedIds.size === 0}>
+                <Text style={{ fontSize: 16, color: themeColors.tint, opacity: selectedIds.size === 0 ? 0.3 : 1 }}>Move</Text>
+             </TouchableOpacity>
+
+             <TouchableOpacity onPress={handleBatchDelete} disabled={selectedIds.size === 0}>
+                <Text style={{ fontSize: 16, color: 'red', opacity: selectedIds.size === 0 ? 0.3 : 1 }}>Delete</Text>
+             </TouchableOpacity>
+          </View>
         </View>
       )}
 
@@ -225,8 +368,7 @@ export default function HomeScreen() {
   );
 }
 
-// --- INTERNAL COMPONENT DEFINITION ---
-// We define this here to guarantee it exists and is a valid Function component.
+// --- INTERNAL COMPONENT: OptionsModal ---
 function OptionsModal({ visible, onClose, onCreateFolder, onEnterSelectionMode }: any) {
   const theme = useColorScheme() ?? 'light';
   const themeColors = Colors[theme];
@@ -235,7 +377,7 @@ function OptionsModal({ visible, onClose, onCreateFolder, onEnterSelectionMode }
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={onClose}>
         <View style={[styles.menuContainer, { backgroundColor: themeColors.container }]}>
-          
+
           <Text style={[styles.menuHeader, { color: themeColors.text }]}>Options</Text>
           
           <TouchableOpacity style={styles.menuOption} onPress={onCreateFolder}>
@@ -254,27 +396,14 @@ function OptionsModal({ visible, onClose, onCreateFolder, onEnterSelectionMode }
   );
 }
 
+// --- STYLES ---
 const styles = StyleSheet.create({
   sectionTitle: { fontSize: 22, fontWeight: 'bold', marginLeft: 22, marginBottom: 15 },
   listContainer: { marginBottom: 5 },
-  checkbox: {
-    position: 'absolute', top: -8, right: -8, zIndex: 10,
-    width: 24, height: 24, borderRadius: 12,
-    borderWidth: 2, borderColor: '#ccc', backgroundColor: '#fff',
-    justifyContent: 'center', alignItems: 'center',
-    elevation: 4
-  },
-  batchBar: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    height: 80, paddingBottom: 15,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 25, borderTopWidth: 1, elevation: 20
-  },
-  
-  // Modal Styles
+  checkbox: { position: 'absolute', top: -8, right: -8, zIndex: 10, width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: '#ccc', backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center', elevation: 4 },
+  batchBar: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 80, paddingBottom: 15, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 25, borderTopWidth: 1, elevation: 20 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'center', alignItems: 'center' },
   menuContainer: { width: 250, borderRadius: 15, paddingVertical: 10, elevation: 10 },
   menuHeader: { fontSize: 18, fontWeight: 'bold', marginVertical: 10, textAlign: 'center' },
   menuOption: { paddingVertical: 15, alignItems: 'center' },
 });
-  

@@ -8,20 +8,29 @@ import {
 interface ActionModalProps {
   visible: boolean;
   onClose: () => void;
-  // Data passed in
+  onMove?: () => void; // 👈 Add this new prop
+
   title: string;
-  isPinned?: boolean; // Optional, because folders don't have pins
+  isPinned?: boolean;
   type: 'file' | 'folder' | null;
+  // 👇 Add currentColor prop
+  currentColor?: string; 
   
-  // Actions
+
+ 
   onDelete: () => void;
-  onRename: (newName: string) => void;
+  // 👇 Update onRename to accept color too
+  onRename: (newName: string, newColor?: string) => void; 
   onTogglePin?: () => void;
+  initialMode?: 'menu' | 'rename'; 
 }
 
+
+
 export default function ActionModal({ 
-  visible, onClose, title, isPinned, type, 
-  onDelete, onRename, onTogglePin 
+  visible, onClose, title, isPinned, type, currentColor,
+  onDelete, onRename, onTogglePin, onMove,
+  initialMode = 'menu' 
 }: ActionModalProps) {
   
   const colorScheme = useColorScheme() ?? 'light';
@@ -29,20 +38,25 @@ export default function ActionModal({
 
   const [mode, setMode] = useState<'menu' | 'rename'>('menu');
   const [inputText, setInputText] = useState('');
+  // 👇 State for selected color
+  const [selectedColor, setSelectedColor] = useState(currentColor || '#666666');
 
-  // Reset state when modal opens
+  
   useEffect(() => {
     if (visible) {
-      setMode('menu');
+      setMode(initialMode); 
       setInputText(title);
+      // Reset color to passed prop or default
+      setSelectedColor(currentColor || '#666666');
     }
-  }, [visible, title]);
+  }, [visible, title, initialMode, currentColor]);
 
   const handleSave = () => {
     if (inputText.trim()) {
-      onRename(inputText);
+      // 👇 Pass back both name and color
+      onRename(inputText, selectedColor);
     }
-    // Mode resets via the useEffect above when visible becomes false
+
   };
 
   return (
@@ -59,24 +73,47 @@ export default function ActionModal({
         <View style={[styles.modalContent, { backgroundColor: themeColors.container }]}>
           
           <Text style={[styles.modalHeader, { color: themeColors.text }]}>
-            {mode === 'rename' ? "Rename" : title}
+            {mode === 'rename' ? (type === 'folder' ? "Edit Folder" : "Rename File") : title}
           </Text>
 
           {mode === 'rename' ? (
-            // --- RENAME MODE ---
+            // --- RENAME & COLOR MODE ---
             <>
               <TextInput 
+                placeholder="Enter Name..."
+                placeholderTextColor={themeColors.lightext}
                 style={[styles.input, { color: themeColors.text, borderColor: themeColors.bordercolorSelected }]}
                 value={inputText}
                 onChangeText={setInputText}
-                autoFocus={true}
+                autoFocus={true} 
                 selectTextOnFocus={true}
               />
+
+              {/* 👇 COLOR PICKER (Only show for folders) */}
+              {type === 'folder' && (
+                <View style={styles.colorContainer}>
+                  <Text style={[styles.colorLabel, { color: themeColors.text }]}>Color:</Text>
+                  <View style={styles.colorRow}>
+                    {themeColors.available_colors.map((color) => (
+                      <TouchableOpacity
+                        key={color}
+                        style={[
+                          styles.colorCircle, 
+                          { backgroundColor: color },
+                          selectedColor === color && styles.colorSelected // Highlight selected
+                        ]}
+                        onPress={() => setSelectedColor(color)}
+                      />
+                    ))}
+                  </View>
+                </View>
+              )}
+
               <View style={styles.modalButtons}>
-                <TouchableOpacity style={styles.modalBtn} onPress={() => setMode('menu')}>
+                <TouchableOpacity style={styles.modalBtn} onPress={() => onClose()}>
                   <Text style={{ color: themeColors.text }}>Cancel</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.modalBtn, { backgroundColor: 'rgba(150,150,150,0.1)'  }]} onPress={handleSave}>
+                <TouchableOpacity style={[styles.modalBtn, { backgroundColor: 'rgba(150,150,150,0.1)' }]} onPress={handleSave}>
                   <Text style={{ color: themeColors.text }}>Save</Text>
                 </TouchableOpacity>
               </View>
@@ -96,7 +133,16 @@ export default function ActionModal({
               )}
 
               <TouchableOpacity style={styles.optionRow} onPress={() => setMode('rename')}>
-                <Text style={[styles.optionText, { color: themeColors.text }]}>Rename</Text>
+                <Text style={[styles.optionText, { color: themeColors.text }]}>
+                   {type === 'folder' ? "Rename & Color" : "Rename"}
+                </Text>
+              </TouchableOpacity>
+
+              <View style={styles.divider} />
+
+              {/* Add this BEFORE the Delete button */}
+              <TouchableOpacity style={styles.optionRow} onPress={onMove}>
+                <Text style={[styles.optionText, { color: themeColors.text }]}>Move to Folder</Text>
               </TouchableOpacity>
 
               <View style={styles.divider} />
@@ -134,5 +180,12 @@ const styles = StyleSheet.create({
   divider: { height: 1, backgroundColor: 'rgba(150,150,150,0.2)', width: '100%' },
   input: { borderWidth: 1, borderRadius: 10, padding: 10, fontSize: 16, marginBottom: 20 },
   modalButtons: { flexDirection: 'row', justifyContent: 'space-between', gap: 10 },
-  modalBtn: { flex: 1, padding: 12, borderRadius: 10, alignItems: 'center', backgroundColor: 'rgba(150,150,150,0.1)' }
+  modalBtn: { flex: 1, padding: 12, borderRadius: 10, alignItems: 'center', backgroundColor: 'rgba(150,150,150,0.1)' },
+  
+  // 👇 New Styles for Color Picker
+  colorContainer: { marginBottom: 20 },
+  colorLabel: { fontSize: 14, marginBottom: 10, fontWeight: '600' },
+  colorRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  colorCircle: { width: 30, height: 30, borderRadius: 15 },
+  colorSelected: { borderWidth: 3, borderColor: '#fff', shadowColor: "#000", shadowOpacity: 0.3, shadowRadius: 3, elevation: 5 },
 });
