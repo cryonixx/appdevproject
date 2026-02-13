@@ -1,48 +1,38 @@
-// 📍 FILE: app/(tabs)/_layout.tsx
-import { Colors } from '@/constants/theme';
-import { Tabs } from 'expo-router';
-import React from 'react';
-import { useColorScheme, View } from 'react-native';
+// 📍 FILE: app/_layout.tsx
+import { FileSystemProvider } from "@/contexts/FileSystemContext";
+import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
+import { Stack } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import 'react-native-reanimated';
 
-// --- IMPORTS ---
-import AudioNotesHeader from '@/components/AudioNotesHeader';
-import PersistentSearchBar from '@/components/PersistentSearchBar'; // ✅ Added this
-import { FileSystemProvider } from '@/contexts/FileSystemContext';
+import AudioNotesHeader from '@/components/AudioNotesHeader'; // ✅ Import it here!
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
-export default function TabLayout() {
-  const colorScheme = useColorScheme() ?? 'light';
-  const themeColors = Colors[colorScheme];
+export default function RootLayout() {
+  const colorScheme = useColorScheme();
 
   return (
-    <FileSystemProvider>
-      <View style={{ flex: 1 }}>
-        <Tabs
-          screenOptions={{
-            tabBarActiveTintColor: themeColors.tint,
-            // Uses your custom top header
-            header: (props) => <AudioNotesHeader {...props} />,
-            // ✅ Hides the native "Home/Folder" bar at the bottom
-            tabBarStyle: { display: 'none' }, 
-          }}
-        >
-          <Tabs.Screen
-            name="index"
-            options={{ title: 'Home' }}
-          />
+    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+      <FileSystemProvider>
+        <Stack screenOptions={{ headerShown: false }}>
           
-          <Tabs.Screen
-            name="folder"
-            options={{
-              href: null,
-              headerShown: false,
-            }}
+          <Stack.Screen name="(tabs)" />
+          
+          {/* ✅ Give the Recording Modal its own Header! */}
+          <Stack.Screen 
+            name="Recording/record" 
+            options={{ 
+              presentation: 'modal', 
+              animation: 'slide_from_bottom',
+              headerShown: true, // Turn the header back on for this specific screen
+              header: () => <AudioNotesHeader /> // Inject your custom header
+            }} 
           />
-        </Tabs>
 
-        {/* ✅ THE PERSISTENT SEARCH BAR */}
-        {/* Placed outside <Tabs> so it floats over every screen in this layout */}
-        <PersistentSearchBar />
-      </View>
-    </FileSystemProvider>
+          <Stack.Screen name="+not-found" />
+        </Stack>
+      </FileSystemProvider>
+      <StatusBar style="auto" />
+    </ThemeProvider>
   );
 }

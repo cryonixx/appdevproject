@@ -1,9 +1,11 @@
 import { Colors } from "@/constants/theme";
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   Keyboard // Added Keyboard for the manual lift
   ,
+
   LayoutAnimation,
   Platform,
   StyleSheet,
@@ -88,7 +90,7 @@ export default function PersistentSearchBar() {
         <View style={styles.unifiedButtonGroup}>
           <TouchableOpacity 
             style={[styles.actionButton, styles.topButton, { backgroundColor: themeColors.container }]}
-            onPress={() => console.log("New Recording")}
+            onPress={() => router.push('/recording_codes/record')}
           >
             <Ionicons name="mic-outline" size={20} color={themeColors.text} />
             <Text style={[styles.actionText, { color: themeColors.text }]}>New Recording</Text>

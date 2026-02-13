@@ -12,8 +12,8 @@ import ActionModal from '@/components/ActionModal';
 import AudioFile from '@/components/AudioFileItem';
 import MoveFileModal from '@/components/MoveFileModal';
 import OptionsModal from '@/components/OptionsModal';
+import PersistentSearchBar from '@/components/PersistentSearchBar'; // ✅ 1. IMPORT ADDED HERE
 import { EventBus } from '@/constants/eventsBus';
-// ADD THESE IMPORTS NEAR THE TOP:
 
 import { FileSystemItem, useFileSystem } from '@/contexts/FileSystemContext';
 
@@ -43,7 +43,7 @@ export default function FolderScreen() {
     // Data Filtering   
     const currentFolder = items.find(i => i.id === id);
 
-    // ✅ THE BOUNCER: If it's a phantom screen or deleted folder, go straight Home
+    // THE BOUNCER
     if (!currentFolder) {
         return <Redirect href="/" />;
     }
@@ -180,13 +180,10 @@ export default function FolderScreen() {
                 styles.container, 
                 { backgroundColor: themeColors.background, borderBottomColor: themeColors.bordercolorSelected }
             ]}>
-                
-                {/* 1. Static Title - Exactly matches AudioNotesHeader */}
                 <Text style={[styles.staticTitle, { color: themeColors.tint }]}>
                     Audio Notes
                 </Text>
                 
-                {/* 2. The Circular Settings Button using your Image asset */}
                 <TouchableOpacity
                     onPress={() => EventBus.emitOpenSettings()}
                     activeOpacity={0.7}
@@ -209,23 +206,21 @@ export default function FolderScreen() {
 
     return (
         <View style={{ flex: 1, backgroundColor: themeColors.background }}>
-            {/* ✅ 1. Turn OFF the native header to let your custom UI breathe */}
             <Stack.Screen options={{ headerShown: false }} />
             <FolderTopHeader />
             
-            <ScrollView contentContainerStyle={{ paddingBottom: 120, paddingTop: 10 }}>
+            {/* Added style={{ flex: 1 }} to push the bottom bars down accurately */}
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 120, paddingTop: 10 }}>
                 
-                {/* ✅ 2. Your custom Header is UNCOMMENTED and upgraded */}
+                
                 <View style={styles.titleRow}>
-                    {/* The Smart Back Button */}
+
                     <TouchableOpacity 
                         style={{ marginRight: 10 }}
                         onPress={() => {
-                            // 1. Check if the router can go back naturally
                             if (router.canGoBack()) {
                                 router.back();
                             } else {
-                                // 2. If it's stuck, FORCE it to go to the Home tab
                                 router.replace('/(tabs)'); 
                             }
                         }}
@@ -284,11 +279,10 @@ export default function FolderScreen() {
                         <Text style={[styles.emptyText, { color: themeColors.text }]}>No files in this folder</Text>
                     )}
                 </View>
-
             </ScrollView>
 
-            {/* --- BATCH ACTION BAR --- */}
-            {isSelectionMode && (
+            {/* ✅ 2. BOTTOM BAR LOGIC: Toggle between Search Bar and Batch Action Bar */}
+            {isSelectionMode ? (
                 <View style={[styles.batchBar, { backgroundColor: themeColors.container, borderTopColor: themeColors.bordercolorSelected }]}>
                     <TouchableOpacity onPress={() => { setIsSelectionMode(false); setSelectedIds(new Set()); }}>
                         <Text style={{ fontSize: 16, color: themeColors.text }}>Cancel</Text>
@@ -306,6 +300,8 @@ export default function FolderScreen() {
                         </TouchableOpacity>
                     </View>
                 </View>
+            ) : (
+                <PersistentSearchBar />
             )}
 
             {/* --- MODALS --- */}
@@ -361,6 +357,7 @@ export default function FolderScreen() {
 }
 
 const styles = StyleSheet.create({
+    // ... [KEEP ALL YOUR EXISTING STYLES EXACTLY THE SAME]
     titleRow: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 22, marginTop: 10, marginBottom: 10 },
     pageTitle: { fontSize: 26, fontWeight: 'bold' },
     section: { marginTop: 15 },
@@ -405,15 +402,15 @@ const styles = StyleSheet.create({
         elevation: 20  
     },
     container: {
-        height: 115, // Matches the fixed height of your main header
+        height: 115, 
         justifyContent: 'flex-end', 
         paddingBottom: 10,
         paddingLeft: 20,
         borderBottomWidth: 3,
-        position: 'relative', // Ensures the absolute button stays put
+        position: 'relative', 
     },
     staticTitle: {
-        fontSize: 40, // Matches the large bold style
+        fontSize: 40, 
         fontWeight: 'bold',
         marginBottom: 5,
     },

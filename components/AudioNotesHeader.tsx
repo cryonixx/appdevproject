@@ -4,13 +4,18 @@ import { useColorScheme } from "@/hooks/use-color-scheme";
 import React from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-export default function AudioNotesHeader(props: any) {
+// ✅ 1. Define the props here
+interface AudioNotesHeaderProps {
+  hideSettings?: boolean;
+}
+
+// ✅ 2. Pass in the prop and give it a default value of false
+export default function AudioNotesHeader({ hideSettings = false }: AudioNotesHeaderProps) {
   const theme = useColorScheme() ?? 'light';
   const themeColors = Colors[theme];
 
   const handleSettingsPress = () => {
     EventBus.emitOpenSettings();
-    
   };
 
   return (
@@ -21,23 +26,25 @@ export default function AudioNotesHeader(props: any) {
         Audio Notes
       </Text>
       
-      {/* 2. The Circular Settings Button */}
-      <TouchableOpacity
-        onPress={handleSettingsPress}
-        activeOpacity={0.7}
-        style={styles.settingsButton}
-      >
-        <Image 
-          key={theme}
-          source={require('@/assets/images/settings_icon.png')} 
-          style={{
-            width: 40,
-            height: 40,
-            resizeMode: 'contain',
-            tintColor: themeColors.tint, 
-          }}
-        />
-      </TouchableOpacity>
+      {/* ✅ 3. Conditionally render the button! */}
+      {!hideSettings && (
+        <TouchableOpacity
+          onPress={handleSettingsPress}
+          activeOpacity={0.7}
+          style={styles.settingsButton}
+        >
+          <Image 
+            key={theme}
+            source={require('@/assets/images/settings_icon.png')} 
+            style={{
+              width: 40,
+              height: 40,
+              resizeMode: 'contain',
+              tintColor: themeColors.tint, 
+            }}
+          />
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
