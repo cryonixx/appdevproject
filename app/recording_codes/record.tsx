@@ -1,10 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import {
-  AudioModule,
-  RecordingPresets,
-  useAudioRecorder,
-  useAudioRecorderState,
-} from "expo-audio";
+import { AudioModule } from "expo-audio";
 import { Stack, useRouter } from "expo-router"; // ✅ Added useRouter
 import {
   StyleSheet,
@@ -17,6 +12,7 @@ import {
 // --- IMPORTS ---
 import AudioNotesHeader from "@/components/AudioNotesHeader";
 import { Colors } from "@/constants/theme";
+import { useAudioRecorderHook } from "@/hooks/useAudioRecorderHook";
 
 export default function RecordScreen() {
   const colorScheme = useColorScheme() ?? "light";
@@ -24,8 +20,9 @@ export default function RecordScreen() {
   const router = useRouter();
 
   // --- AUDIO RECORDER HOOK ---
-  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY); // Future: Customize presets as needed
-  const recorderState = useAudioRecorderState(audioRecorder);
+  // const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY); // Future: Customize presets as needed
+  // const recorderState = useAudioRecorderState(audioRecorder);
+  const { startRecording, stopRecording, isRecording } = useAudioRecorderHook();
 
   // --- HANDLER FUNCTIONS ---
 
@@ -35,9 +32,9 @@ export default function RecordScreen() {
   const handleRestart = async () => {
     console.log("🔄 Restarting...");
     try {
-      if (audioRecorder.isRecording) {
+      if (!isRecording) {
         console.log("⏹️ Stopping current recording before restart...");
-        await audioRecorder.stop();
+        await stopRecording();
       }
     } catch (err) {
       console.error("Failed to stop recorder", err);
@@ -52,13 +49,12 @@ export default function RecordScreen() {
       return;
     }
     try {
-      if (!audioRecorder.isRecording) {
-        await audioRecorder.prepareToRecordAsync();
-        await audioRecorder.record();
+      if (!isRecording) {
+        await startRecording();
         console.log("🔴 Started recording!");
       } else {
-        await audioRecorder.stop();
         console.log("⏹️ Stopped recording!");
+        await stopRecording();
       }
     } catch (err) {
       console.error("Recorder toggle failed", err);
@@ -87,7 +83,7 @@ export default function RecordScreen() {
         {/* --- TOP HALF (Placeholder for Waveform) --- */}
         <View style={styles.topHalf}>
           <Text style={[styles.placeholderText, { color: themeColors.text }]}>
-            {recorderState.isRecording
+            {isRecording
               ? "Recording in progress..."
               : "Waveform and Timer go here"}
           </Text>
@@ -133,7 +129,7 @@ export default function RecordScreen() {
                 ]}
               >
                 {/* Dynamically swap icon based on state */}
-                {recorderState.isRecording ? (
+                {isRecording ? (
                   <Ionicons name="square" size={24} color={themeColors.text} />
                 ) : (
                   <Ionicons
@@ -178,7 +174,6 @@ export default function RecordScreen() {
   );
 }
 
-// ... [Keep your exact same styles object down here] ...
 const styles = StyleSheet.create({
   container: {
     flex: 1,
