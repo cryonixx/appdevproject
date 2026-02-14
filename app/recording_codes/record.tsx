@@ -20,9 +20,8 @@ export default function RecordScreen() {
   const router = useRouter();
 
   // --- AUDIO RECORDER HOOK ---
-  // const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY); // Future: Customize presets as needed
-  // const recorderState = useAudioRecorderState(audioRecorder);
-  const { startRecording, stopRecording, isRecording } = useAudioRecorderHook();
+  const { startRecording, stopRecording, discardRecording, isRecording } =
+    useAudioRecorderHook();
 
   // --- HANDLER FUNCTIONS ---
 
@@ -35,11 +34,11 @@ export default function RecordScreen() {
       if (!isRecording) {
         console.log("⏹️ Stopping current recording before restart...");
         await stopRecording();
+        await discardRecording();
       }
     } catch (err) {
       console.error("Failed to stop recorder", err);
     }
-    // Future: Discard temp file and reset timer to 00:00
   };
 
   const handleToggleRecord = async () => {
@@ -61,9 +60,9 @@ export default function RecordScreen() {
     }
   };
 
-  const handleCancel = () => {
+  const handleCancel = async () => {
     console.log("❌ Canceling and closing modal...");
-    // Future: Clean up any unsaved temporary audio files in the cache before leaving
+    await discardRecording();
     router.back();
   };
 

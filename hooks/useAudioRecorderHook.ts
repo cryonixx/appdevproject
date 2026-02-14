@@ -1,6 +1,11 @@
-import { AudioModule, RecordingPresets, useAudioRecorder, useAudioRecorderState } from 'expo-audio';
-import { useState } from 'react';
-import { Alert } from 'react-native';
+import {
+  AudioModule,
+  RecordingPresets,
+  useAudioRecorder,
+  useAudioRecorderState,
+} from "expo-audio";
+import { useState } from "react";
+import { Alert } from "react-native";
 
 export interface RecordingFile {
   id: string;
@@ -12,10 +17,10 @@ export interface RecordingFile {
 
 export function useAudioRecorderHook() {
   const [recordingsList, setRecordingsList] = useState<RecordingFile[]>([]);
-  
+
   // 1. Initialize the recorder
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
-  
+
   // 2. Use status to force re-renders so your UI sees isRecording and currentTime changes
   const status = useAudioRecorderState(recorder);
 
@@ -23,18 +28,21 @@ export function useAudioRecorderHook() {
   const startRecording = async () => {
     try {
       const permission = await AudioModule.requestRecordingPermissionsAsync();
-      
+
       if (!permission.granted) {
-        Alert.alert('Permission Denied', 'You need to allow microphone access.');
+        Alert.alert(
+          "Permission Denied",
+          "You need to allow microphone access.",
+        );
         return;
       }
 
       await recorder.prepareToRecordAsync();
       recorder.record();
-      
-      console.log('Recording started');
+
+      console.log("Recording started");
     } catch (err) {
-      console.error('Failed to start recording', err);
+      console.error("Failed to start recording", err);
     }
   };
 
@@ -43,11 +51,11 @@ export function useAudioRecorderHook() {
     try {
       // Capture the final duration before stopping
       const finalDuration = recorder.currentTime;
-      
+
       await recorder.stop();
-      
+
       const uri = recorder.uri;
-      console.log('Recording stopped at', uri);
+      console.log("✅ Recording saved to:", uri);
 
       if (uri) {
         const newFile: RecordingFile = {
@@ -61,7 +69,19 @@ export function useAudioRecorderHook() {
         setRecordingsList((prev) => [newFile, ...prev]);
       }
     } catch (err) {
-      console.error('Failed to stop recording', err);
+      console.error("Failed to stop recording", err);
+    }
+  };
+
+  // --- DISCARD RECORDING ---
+  const discardRecording = async () => {
+    try {
+      if (recorder.isRecording) {
+        await recorder.stop();
+        console.log("✅ Recording discarded");
+      }
+    } catch (err) {
+      console.error("Failed to discard recording:", err);
     }
   };
 
@@ -69,14 +89,15 @@ export function useAudioRecorderHook() {
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+    return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
   };
 
   return {
     startRecording,
     stopRecording,
-    isRecording: recorder.isRecording, // Fixed: changed from .recording to .isRecording
-    currentTime: recorder.currentTime, // Useful for showing a live timer in your UI
+    discardRecording,
+    isRecording: recorder.isRecording,
+    currentTime: recorder.currentTime,
     recordingsList,
     hasPermission: AudioModule.recordingGranted,
   };
