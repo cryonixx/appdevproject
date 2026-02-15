@@ -40,7 +40,8 @@
           }
         }
       ],
-      "expo-audio"
+      "expo-audio",
+      "expo-speech-transcriber"
     ],
     "experiments": {
       "typedRoutes": true,

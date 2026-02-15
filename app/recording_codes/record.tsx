@@ -20,12 +20,16 @@ export default function RecordScreen() {
   const router = useRouter();
 
   // --- AUDIO RECORDER HOOK ---
-  const { startRecording, stopRecording, discardRecording, isRecording } =
-    useAudioRecorderHook();
+  const {
+    audioUri,
+    startRecording,
+    stopRecording,
+    discardRecording,
+    isRecording,
+  } = useAudioRecorderHook();
 
   // --- HANDLER FUNCTIONS ---
 
-  // TODO: Implement logic to discard temp file and reset timer when restarting recording
   // TODO: Create a new folder where recordings are saved and manage file URIs properly
 
   const handleRestart = async () => {
@@ -66,9 +70,9 @@ export default function RecordScreen() {
     router.back();
   };
 
-  const handleTranscribe = () => {
-    console.log("📝 Sending audio to NLP pipeline for transcription...");
-    // Future: Pass the saved file URI to your speech-to-text API or backend service
+  const handleTranscribe = async () => {
+    console.log("📝 Transcribing...");
+    await transcribeAudio(audioUri);
   };
 
   return (
@@ -233,3 +237,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 });
+function transcribeAudio(uri: any) {
+  throw new Error("Function not implemented.");
+}

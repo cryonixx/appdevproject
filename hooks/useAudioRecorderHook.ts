@@ -100,5 +100,6 @@ export function useAudioRecorderHook() {
     currentTime: recorder.currentTime,
     recordingsList,
     hasPermission: AudioModule.recordingGranted,
+    audioUri: recorder.uri,
   };
 }
