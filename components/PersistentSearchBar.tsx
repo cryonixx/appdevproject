@@ -1,9 +1,13 @@
 import { Colors } from "@/constants/theme";
+import { useFileSystem } from '@/contexts/FileSystemContext';
 import { useSearch } from '@/contexts/SearchContext';
 import { Ionicons } from '@expo/vector-icons';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
+  Alert,
   Keyboard,
   LayoutAnimation,
   Platform,
@@ -16,7 +20,6 @@ import {
   View
 } from 'react-native';
 
-import { useFileSystem } from '@/contexts/FileSystemContext';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -75,7 +78,49 @@ export default function PersistentSearchBar() {
   };
 
   // ... (keep handleImportAudio logic exactly as you had it) ...
-  const handleImportAudio = async () => { /* your existing code */ };
+  const handleImportAudio = async () => { try {
+      // A. Open System File Picker
+      const result = await DocumentPicker.getDocumentAsync({
+        type: 'audio/*', // Only allow audio files
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled) return;
+
+      const { uri, name, size } = result.assets[0];
+
+      // Optional: Check file size (limit to 50MB for example)
+      if (size && size > 50 * 1024 * 1024) {
+        Alert.alert("File too large", "Please select a file under 50MB.");
+        return;
+      }
+
+      // B. Create Entry in Context (Metadata)
+      // We pass 'null' as parentId to put it in the root folder
+      // We pass the file name as the title
+      const newId = await createFile(name, null, "Imported"); 
+
+      // C. Determine Paths
+      const FS = FileSystem as any;
+      const rootDir = FS.documentDirectory || FS.cacheDirectory;
+      const destinationUri = rootDir + 'recordings/' + newId;
+
+      // D. Copy the file from external storage to our sandbox
+      await FileSystem.copyAsync({
+        from: uri,
+        to: destinationUri
+      });
+
+      // E. Close menu and notify user
+      setIsExpanded(false);
+      // Optional: Navigate to home or show success toast
+      console.log("Import success:", destinationUri);
+
+    } catch (error) {
+      console.error("Import failed:", error);
+      Alert.alert("Import Failed", "Could not copy the audio file.");
+    }
+  };
 
   return (
     <View style={[
