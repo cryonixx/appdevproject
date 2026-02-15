@@ -14,6 +14,7 @@ import MoveFileModal from '@/components/MoveFileModal';
 import OptionsModal from '@/components/OptionsModal';
 import PersistentSearchBar from '@/components/PersistentSearchBar'; // ✅ 1. IMPORT ADDED HERE
 import { EventBus } from '@/constants/eventsBus';
+import { useSearch } from '@/contexts/SearchContext'; // ✅ Add this import
 
 import { FileSystemItem, useFileSystem } from '@/contexts/FileSystemContext';
 
@@ -33,6 +34,7 @@ export default function FolderScreen() {
     const [isCreating, setIsCreating] = useState(false);
     const [targetItem, setTargetItem] = useState<FileSystemItem | null>(null);
     const [modalMode, setModalMode] = useState<'menu' | 'rename'>('menu');
+    const { searchQuery } = useSearch();
 
     // --- SELECTION STATES ---
     const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -49,8 +51,24 @@ export default function FolderScreen() {
     }
 
     const folderName = currentFolder.title; 
-    const foldersInside = items.filter(i => i.parentId === id && i.type === 'folder');
-    const filesInside = items.filter(i => i.parentId === id && i.type === 'file');
+    // ✅ 2. FIX: Added Search Results Logic
+    const searchResults = React.useMemo(() => {
+        if (!searchQuery) return [];
+        return items.filter(item => 
+            item.parentId === id &&
+            item.title.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+    }, [items, searchQuery, id]);
+
+    // ✅ 3. FIX: Use useMemo for stability while typing
+    const foldersInside = React.useMemo(() => 
+        items.filter(i => i.parentId === id && i.type === 'folder'), 
+    [items, id]);
+
+    const filesInside = React.useMemo(() => 
+        items.filter(i => i.parentId === id && i.type === 'file'), 
+    [items, id]);
+
 
     // --- HELPER: Get Set of Items being acted upon ---
     const getMovingItems = () => {
@@ -204,93 +222,139 @@ export default function FolderScreen() {
         );
     };
 
+    
+
     return (
         <View style={{ flex: 1, backgroundColor: themeColors.background }}>
             <Stack.Screen options={{ headerShown: false }} />
             <FolderTopHeader />
             
-            {/* Added style={{ flex: 1 }} to push the bottom bars down accurately */}
+
             <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 120, paddingTop: 10 }}>
                 
-                
-                <View style={styles.titleRow}>
+                {/* 👇 UPDATE THIS SECTION INSIDE THE SCROLLVIEW */}
+                {searchQuery.length > 0 ? (
+                    <View style={{ paddingHorizontal: 22, paddingTop: 10 }}>
+                        <Text style={[styles.sectionHeader, { marginLeft: 0, color: themeColors.text }]}>
+                            Search Results ({searchResults.length})
+                        </Text>
 
-                    <TouchableOpacity 
-                        style={{ marginRight: 10 }}
-                        onPress={() => {
-                            if (router.canGoBack()) {
-                                router.back();
-                            } else {
-                                router.replace('/(tabs)'); 
-                            }
-                        }}
-                    >
-                        <Ionicons name="chevron-back" size={32} color={themeColors.tint} />
-                    </TouchableOpacity>
-
-                    <Ionicons name="folder-open" size={28} color={themeColors.tint} style={{ marginRight: 10 }} />
-                    <Text style={[styles.pageTitle, { color: themeColors.text }]}>{folderName}</Text>
-                </View>
-
-                {/* --- FOLDERS SECTION --- */}
-                {foldersInside.length > 0 && (
-                    <View style={styles.section}>
-                        <Text style={[styles.sectionHeader, { color: themeColors.text }]}>Folders</Text>
-                        {foldersInside.map(folder => 
-                            renderSelectable(
-                                <TouchableOpacity 
-                                    key={folder.id} 
-                                    style={[styles.folderCard, { backgroundColor: folder.color || themeColors.container }]}
-                                    onPress={() => handleItemPress(folder.id)}
-                                    onLongPress={() => handleEditRequest(folder)}
-                                    delayLongPress={200}
-                                >
-                                    <Ionicons name="folder" size={24} color={themeColors.text} />
-                                    <Text style={[styles.folderText, { color: themeColors.text }]} numberOfLines={1}>
-                                        {folder.title}
-                                    </Text>
-                                    <Ionicons name="chevron-forward" size={20} color={themeColors.text} style={{ opacity: 0.3 }} />
-                                </TouchableOpacity>,
-                                folder.id
-                            )
+                        {/* ✅ ADDED INDICATOR LOGIC HERE */}
+                        {searchResults.length === 0 ? (
+                            <View style={{ alignItems: 'center', marginTop: 50 }}>
+                                <Ionicons name="search-outline" size={40} color="#999" style={{ marginBottom: 10 }} />
+                                <Text style={{ color: '#999', fontSize: 16, textAlign: 'center' }}>
+                                    No matches found in this folder for "{searchQuery}"
+                                </Text>
+                            </View>
+                        ) : (
+                            // If results exist, map them as usual
+                            searchResults.map(item => (
+                                <View key={item.id} style={{ marginTop: 10 }}>
+                                    {item.type === 'folder' ? (
+                                        renderSelectable(
+                                            <TouchableOpacity 
+                                                style={[styles.folderCard, { backgroundColor: item.color || themeColors.container }]}
+                                                onPress={() => handleItemPress(item.id)}
+                                                onLongPress={() => handleEditRequest(item)}
+                                            >
+                                                <Ionicons name="folder" size={24} color={themeColors.text} />
+                                                <Text style={[styles.folderText, { color: themeColors.text }]}>{item.title}</Text>
+                                            </TouchableOpacity>, item.id
+                                        )
+                                    ) : (
+                                        renderSelectable(
+                                            <AudioFile 
+                                                id={item.id}
+                                                title={item.title}
+                                                date={item.date}
+                                                duration={item.duration}
+                                                isPinned={item.isPinned}
+                                                onPress={() => handleItemPress(item.id)}
+                                                onLongPress={() => handleEditRequest(item)}
+                                            />, item.id
+                                        )
+                                    )}
+                                </View>
+                            ))
                         )}
                     </View>
-                )}
+                ) : (
+                    
+                    
+                    <>
+                        <View style={styles.titleRow}>
+                            <TouchableOpacity 
+                                style={{ marginRight: 10 }}
+                                onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)')}
+                            >
+                                <Ionicons name="chevron-back" size={32} color={themeColors.tint} />
+                            </TouchableOpacity>
+                            <Ionicons name="folder-open" size={28} color={themeColors.tint} style={{ marginRight: 10 }} />
+                            <Text style={[styles.pageTitle, { color: themeColors.text }]}>{folderName}</Text>
+                        </View>
 
-                {/* --- FILES SECTION --- */}
-                <View style={styles.section}>
-                    <Text style={[styles.sectionHeader, { color: themeColors.text }]}>Files</Text>
-                    {filesInside.length > 0 ? (
-                        filesInside.map(file => 
-                            renderSelectable(
-                                <AudioFile 
-                                    key={file.id} 
-                                    title={file.title}
-                                    date={file.date || "Unknown Date"}       
-                                    duration={file.duration || "00:00"}
-                                    isPinned={file.isPinned || false}
-                                    onPress={() => handleItemPress(file.id)} 
-                                    onLongPress={() => handleEditRequest(file)}
-                                />,
-                                file.id
-                            )
-                        )
-                    ) : (
-                        <Text style={[styles.emptyText, { color: themeColors.text }]}>No files in this folder</Text>
-                    )}
-                </View>
+                        {/* --- FOLDERS SECTION --- */}
+                        {foldersInside.length > 0 && (
+                            <View style={styles.section}>
+                                <Text style={[styles.sectionHeader, { color: themeColors.text }]}>Folders</Text>
+                                {foldersInside.map(folder => 
+                                    renderSelectable(
+                                        <TouchableOpacity 
+                                            key={folder.id} 
+                                            style={[styles.folderCard, { backgroundColor: folder.color || themeColors.container }]}
+                                            onPress={() => handleItemPress(folder.id)}
+                                            onLongPress={() => handleEditRequest(folder)}
+                                        >
+                                            <Ionicons name="folder" size={24} color={themeColors.text} />
+                                            <Text style={[styles.folderText, { color: themeColors.text }]} numberOfLines={1}>{folder.title}</Text>
+                                            <Ionicons name="chevron-forward" size={20} color={themeColors.text} style={{ opacity: 0.3 }} />
+                                        </TouchableOpacity>,
+                                        folder.id
+                                    )
+                                )}
+                            </View>
+                        )}
+
+                        {/* --- FILES SECTION --- */}
+                        <View style={styles.section}>
+                            <Text style={[styles.sectionHeader, { color: themeColors.text }]}>Files</Text>
+                            {filesInside.length > 0 ? (
+                                filesInside.map(file => 
+                                    renderSelectable(
+                                        <AudioFile 
+                                            id={file.id} // ✅ 5. FIX: Added missing ID here
+                                            key={file.id} 
+                                            title={file.title}
+                                            date={file.date || "Unknown Date"}       
+                                            duration={file.duration || "00:00"}
+                                            isPinned={file.isPinned || false}
+                                            onPress={() => handleItemPress(file.id)} 
+                                            onLongPress={() => handleEditRequest(file)}
+                                        />,
+                                        file.id
+                                    )
+                                )
+                            ) : (
+                                <Text style={[styles.emptyText, { color: themeColors.text }]}>No files in this folder</Text>
+                            )}
+                        </View>
+                    </>
+                )}
             </ScrollView>
 
-            {/* ✅ 2. BOTTOM BAR LOGIC: Toggle between Search Bar and Batch Action Bar */}
+            {/* BATCH BAR / SEARCH BAR LOGIC */}
             {isSelectionMode ? (
+                /* ... (Keep your batchBar code) */
                 <View style={[styles.batchBar, { backgroundColor: themeColors.container, borderTopColor: themeColors.bordercolorSelected }]}>
                     <TouchableOpacity onPress={() => { setIsSelectionMode(false); setSelectedIds(new Set()); }}>
                         <Text style={{ fontSize: 16, color: themeColors.text }}>Cancel</Text>
                     </TouchableOpacity>
-                    
+
                     <Text style={{ fontWeight: 'bold', color: themeColors.text }}>{selectedIds.size} Selected</Text>
-                    
+
                     <View style={{ flexDirection: 'row', gap: 20 }}>
+
                         <TouchableOpacity onPress={() => setMoveVisible(true)} disabled={selectedIds.size === 0}>
                             <Text style={{ fontSize: 16, color: themeColors.tint, opacity: selectedIds.size === 0 ? 0.3 : 1 }}>Move</Text>
                         </TouchableOpacity>
@@ -329,19 +393,19 @@ export default function FolderScreen() {
                 }}
                 onDelete={handleDelete}
                 onTogglePin={handleTogglePin}
-                onRename={(name, color) => {
+                // ✅ 6. FIX: Added async/await for Promise Error
+                onRename={async (name, color) => {
                     const wasCreating = isCreating;
                     const targetId = targetItem?.id;
                     setActionModalVisible(false);
-                    setTimeout(() => {
-                        if (wasCreating) {
-                            const newId = createFolder(name, id); 
-                            if (color) renameItem(newId, name, color);
-                        } else if (targetId) {
-                            renameItem(targetId, name, color);
-                        }
-                        setIsCreating(false);
-                    }, 100);
+                    
+                    if (wasCreating) {
+                        // Pass color directly to createFolder (it's supported in your context)
+                        await createFolder(name, id, color); 
+                    } else if (targetId) {
+                        renameItem(targetId, name, color);
+                    }
+                    setIsCreating(false);
                 }}
             /> 
 

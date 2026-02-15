@@ -1,22 +1,24 @@
+import { useFocusEffect } from '@react-navigation/native';
+import { useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import { Alert, FlatList, Modal, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, useColorScheme, View } from 'react-native';
 
 // --- IMPORTS ---
 import { EventBus } from '@/constants/eventsBus';
 import { Colors } from "@/constants/theme";
-import { useFocusEffect } from '@react-navigation/native';
 
+  
 
 // ✅ CUSTOM COMPONENTS
 import ActionModal from '@/components/ActionModal';
 import AudioFile from '@/components/AudioFileItem';
 import Folder, { FolderData } from '@/components/folder';
-import { useRouter } from 'expo-router';
-// ✅ Ensure this is imported
+
 import MoveFileModal from '@/components/MoveFileModal';
 
-// ✅ IMPORT CONTEXT
+// ✅ IMPORT CONTEXTS
 import { useFileSystem } from '@/contexts/FileSystemContext';
+import { useSearch } from '@/contexts/SearchContext'; // 👈 IMPORT SEARCH CONTEXT
 
 // --- TYPES ---
 interface RecordingFile {
@@ -29,8 +31,28 @@ interface ExtendedFolderData extends FolderData {
 export default function HomeScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme() ?? 'light';
+
   const themeColors = Colors[colorScheme] || Colors.light;
+  
+
+  // --- CONTEXT HOOKS ---
+  const { items, createFolder, moveItems, deleteItems, togglePin, renameItem } = useFileSystem();
+  const { searchQuery } = useSearch(); // 👈 GET SEARCH QUERY
+
+  // --- UI STATES ---
+  const [actionModalVisible, setActionModalVisible] = useState(false);
+  const [optionsModalVisible, setOptionsModalVisible] = useState(false);
+  const [moveModalVisible, setMoveModalVisible] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [modalMode, setModalMode] = useState<'menu' | 'rename'>('menu');
+
+  // --- SELECTION ---
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // --- TARGETS ---
+  const [targetFile, setTargetFile] = useState<RecordingFile | null>(null);
+  const [targetFolder, setTargetFolder] = useState<ExtendedFolderData | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -42,53 +64,41 @@ export default function HomeScreen() {
       };
     }, [])
   );
-  const [modalMode, setModalMode] = useState<'menu' | 'rename'>('menu');
 
-  // --- DATA ---
-  const { items, createFolder, moveItems, deleteItems, togglePin, renameItem } = useFileSystem();
+  // --- DATA FILTERING ---
 
-  // --- UI STATES ---
-  const [actionModalVisible, setActionModalVisible] = useState(false);
-  const [optionsModalVisible, setOptionsModalVisible] = useState(false);
-  const [moveModalVisible, setMoveModalVisible] = useState(false);
+  const searchResults = React.useMemo(() => {
+    if (!searchQuery) return [];
+    
+    const filtered = items.filter(item => 
+      item.title.toLowerCase().includes(searchQuery.toLowerCase())
+    );
 
-  // --- SELECTION ---
-  const [isSelectionMode, setIsSelectionMode] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    // ✅ DEBUG INDICATOR: Watch your terminal to see the search working in real-time
+    console.log(`Search: "${searchQuery}" | Matches: ${filtered.length}`);
+    
+    return filtered;
+  }, [items, searchQuery]);
 
-  // --- TARGETS ---
-  const [targetFile, setTargetFile] = useState<RecordingFile | null>(null);
-  const [targetFolder, setTargetFolder] = useState<ExtendedFolderData | null>(null);
-
-  // --- FILTERING (Root Level) ---
-  const rootFolders: ExtendedFolderData[] = items
+  const rootFolders = React.useMemo(() => items
     .filter(i => i.type === 'folder' && i.parentId === null)
     .map(i => ({ 
         id: i.id, 
         name: i.title, 
         color: i.color || '#666', 
         folderId: i.parentId 
-    }));
+    })), [items]);
 
-  const rootFiles: RecordingFile[] = items
-    .filter(i => i.type === 'file' && i.parentId === null)
-    .map(i => ({
-        id: i.id,
-        title: i.title,
-        date: i.date,
-        duration: i.duration,
-        isPinned: i.isPinned,
-        folderId: i.parentId
-    }));
-  
-  const pinnedFiles = items
-    .filter(i => i.type === 'file' && i.isPinned) 
-    .filter(i => i.parentId === null) 
-    .map(i => ({ id: i.id, title: i.title, date: i.date, duration: i.duration, isPinned: i.isPinned, folderId: i.parentId }));
+  const pinnedFiles = React.useMemo(() => items
+    .filter(i => i.type === 'file' && i.isPinned && i.parentId === null) 
+    .map(i => ({ id: i.id, title: i.title, date: i.date, duration: i.duration, isPinned: i.isPinned, folderId: i.parentId })), [items]);
 
-  const recentFiles = rootFiles.filter(f => !f.isPinned);
+  const recentFiles = React.useMemo(() => items
+    .filter(i => i.type === 'file' && !i.isPinned && i.parentId === null)
+    .map(i => ({ id: i.id, title: i.title, date: i.date, duration: i.duration, isPinned: i.isPinned, folderId: i.parentId })), [items]);
 
-  // --- RENDER HELPER ---
+
+  // --- HELPER: RENDER SELECTABLE WRAPPER ---
   const renderSelectable = (component: React.ReactNode, id: string) => {
     const isSelected = selectedIds.has(id);
     return (
@@ -115,6 +125,7 @@ export default function HomeScreen() {
         router.push(`/folder/${id}`)
       } else {
         console.log(`Playing file ${id}`);
+        // Add your playback logic here
       }
     }
   };  
@@ -133,14 +144,21 @@ export default function HomeScreen() {
   };
 
   // --- ACTIONS ---
+  const handleCreateFolder = () => {
+      setOptionsModalVisible(false);
+      setIsCreating(true);         
+      setTargetFolder(null);       
+      setModalMode('rename');      
+      setActionModalVisible(true);
+  };
 
   const handleOpenMove = () => {
      if (targetFile || targetFolder) {
-        setActionModalVisible(false);
-        setTimeout(() => setMoveModalVisible(true), 300);
+       setActionModalVisible(false);
+       setTimeout(() => setMoveModalVisible(true), 300);
      }
      else if (isSelectionMode && selectedIds.size > 0) {
-        setMoveModalVisible(true);
+       setMoveModalVisible(true);
      }
   };
 
@@ -163,54 +181,34 @@ export default function HomeScreen() {
     setTargetFolder(null);
   };
 
-  const handleCreateFolder = () => {
-    setOptionsModalVisible(false);
-    setTargetFolder(null);
-    setTargetFile(null);
-    setIsCreating(true); 
-    setModalMode('rename'); 
-    setTimeout(() => {
-      setActionModalVisible(true);
-    }, 500);
-  };
-  
   const handleBatchDelete = () => {
-  // ✅ 1. Clone the Set to prevent passing a raw state reference
-  const idsToDelete = new Set(selectedIds);
+    const idsToDelete = new Set(selectedIds);
+    const executeDelete = () => {
+      deleteItems(idsToDelete);
+      setIsSelectionMode(false);
+      setSelectedIds(new Set());
+    };
 
-  const executeDelete = () => {
-    deleteItems(idsToDelete);
-    setIsSelectionMode(false);
-    setSelectedIds(new Set());
+    if (Platform.OS === 'web') {
+      const confirmed = window.confirm(`Delete ${selectedIds.size} items?`);
+      if (confirmed) executeDelete();
+      return;
+    }
+
+    Alert.alert("Delete Items", `Delete ${selectedIds.size} items?`, [
+      { text: "Cancel", style: "cancel" },
+      { text: "Delete", style: 'destructive', onPress: executeDelete }
+    ]);
   };
 
-  // ✅ 2. Handle Expo Web's inability to process Alert.alert button callbacks
-  if (Platform.OS === 'web') {
-    const confirmed = window.confirm(`Delete ${selectedIds.size} items?`);
-    if (confirmed) executeDelete();
-    return;
-  }
 
-  // Native Alert for iOS/Android
-  Alert.alert("Delete Items", `Delete ${selectedIds.size} items?`, [
-    { text: "Cancel", style: "cancel" },
-    {
-      text: "Delete",
-      style: 'destructive',
-      onPress: executeDelete
-    }
-  ]);
-};
-
-  // ✅ FIX 1: Helper to get the correct set of items being moved
-  // This solves the TypeScript "undefined" error and Logic error
   const getMovingItems = () => {
     if (isSelectionMode) return selectedIds;
     const id = targetFile?.id || targetFolder?.id;
     return id ? new Set([id]) : new Set<string>();
   };
 
-  // ✅ FIX 2: Prepare folders list (excluding the ones being moved)
+
   const availableFolders = items
     .filter(i => i.type === 'folder' && !getMovingItems().has(i.id))
     .map(f => ({
@@ -223,72 +221,122 @@ export default function HomeScreen() {
     <View style={{ flex: 1, backgroundColor: themeColors.background }}>
       <ScrollView contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
         
-        {/* FOLDERS (Root) */}
-        <Text style={[styles.sectionTitle, { color: themeColors.text, marginTop: 20 }]}>Folders</Text>
-        <FlatList
-          data={rootFolders} 
-          keyExtractor={item => item.id}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingLeft: 22, paddingRight: 30, paddingTop: 10, gap: 15 }}
-          extraData={selectedIds}
-          renderItem={({ item }) => renderSelectable(
-            <Folder 
-              data={item} 
-              onPress={() => handleItemPress(item.id, 'folder')}
-              onLongPress={() => handleLongPress(item, 'folder')}
-            />, item.id
-          )}
-        />
+        {/* 👇 SEARCH CONDITIONAL RENDERING */}
+        {searchQuery.length > 0 ? (
+          // --- SEARCH MODE ---
+          <View style={{ paddingHorizontal: 22, paddingTop: 20 }}>
+            {/* ✅ VISUAL INDICATOR: Shows exactly how many items were found */}
+            <Text style={[styles.sectionTitle, { marginLeft: 0, color: themeColors.text }]}>
+              Search Results ({searchResults.length})
+            </Text>
+            
+            {searchResults.length === 0 ? (
+               // ✅ EMPTY STATE INDICATOR: Confirms search ran but found nothing
+               <View style={{ alignItems: 'center', marginTop: 50 }}>
+                  <Text style={{ color: '#999', fontSize: 16 }}>No items found matching "{searchQuery}"</Text>
+               </View>
+            ) : (
+               <View style={{ gap: 10 }}>
+                 {searchResults.map(item => (
+                   <View key={item.id}>
+                     {item.type === 'folder' ? (
+                        renderSelectable(
+                           <Folder 
+                              data={{ id: item.id, name: item.title, color: item.color || '#666' }} 
+                              onPress={() => handleItemPress(item.id, 'folder')}
+                              onLongPress={() => handleLongPress(item, 'folder')}
+                           />, item.id
+                        )
+                     ) : (
+                        renderSelectable(
+                           <AudioFile 
+                              id={item.id}
+                              title={item.title}
+                              date={item.date}
+                              duration={item.duration}
+                              isPinned={item.isPinned}
+                              onPress={() => handleItemPress(item.id, 'file')}
+                              onLongPress={() => handleLongPress(item, 'file')}
+                           />, item.id
+                        )
+                     )}
+                   </View>
+                 ))}
+               </View>
+            )}
+          </View>
+        ) : (
+          // --- NORMAL MODE ---
+          <>
+            {/* FOLDERS (Root) */}
+            <Text style={[styles.sectionTitle, { color: themeColors.text, marginTop: 20 }]}>Folders</Text>
+            <FlatList
+              data={rootFolders} 
+              keyExtractor={item => item.id}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingLeft: 22, paddingRight: 30, paddingTop: 10, gap: 15 }}
+              extraData={selectedIds}
+              renderItem={({ item }) => renderSelectable(
+                <Folder 
+                  data={item} 
+                  onPress={() => handleItemPress(item.id, 'folder')}
+                  onLongPress={() => handleLongPress(item, 'folder')}
+                />, item.id
+              )}
+            />
 
-        {/* PINNED (Root) */}
-        <Text style={[styles.sectionTitle, { color: themeColors.text }]}>Pinned</Text>
-        <View style={styles.listContainer}>
-          {pinnedFiles.length === 0 && <Text style={{marginLeft: 22, color: '#999'}}>No pinned files</Text>}
-          {pinnedFiles.map(file => (
-            <View key={file.id}>
-                {renderSelectable(
-                    <AudioFile 
-                        {...file} 
-                        onPress={() => handleItemPress(file.id, 'file')} 
-                        onLongPress={() => handleLongPress(file, 'file')} 
-                    />, file.id
-                )}
+            {/* PINNED (Root) */}
+            <Text style={[styles.sectionTitle, { color: themeColors.text }]}>Pinned</Text>
+            <View style={styles.listContainer}>
+              {pinnedFiles.length === 0 && <Text style={{marginLeft: 22, color: '#999'}}>No pinned files</Text>}
+              {pinnedFiles.map(file => (
+                <View key={file.id}>
+                    {renderSelectable(
+                        <AudioFile 
+                            {...file} 
+                            onPress={() => handleItemPress(file.id, 'file')} 
+                            onLongPress={() => handleLongPress(file, 'file')} 
+                        />, file.id
+                    )}
+                </View>
+              ))}
             </View>
-          ))}
-        </View>
 
-        {/* RECENT (Root) */}
-        <Text style={[styles.sectionTitle, { color: themeColors.text, marginTop: 25 }]}>Recent</Text>
-        <View style={styles.listContainer}>
-          {recentFiles.length === 0 && <Text style={{marginLeft: 22, color: '#999'}}>No recent files</Text>}
-          {recentFiles.map(file => (
-             <View key={file.id}>
-                {renderSelectable(
-                    <AudioFile 
-                        {...file} 
-                        onPress={() => handleItemPress(file.id, 'file')} 
-                        onLongPress={() => handleLongPress(file, 'file')} 
-                    />, file.id
-                )}
+            {/* RECENT (Root) */}
+            <Text style={[styles.sectionTitle, { color: themeColors.text, marginTop: 25 }]}>Recent</Text>
+            <View style={styles.listContainer}>
+              {recentFiles.length === 0 && <Text style={{marginLeft: 22, color: '#999'}}>No recent files</Text>}
+              {recentFiles.map(file => (
+                 <View key={file.id}>
+                    {renderSelectable(
+                        <AudioFile 
+                            {...file} 
+                            onPress={() => handleItemPress(file.id, 'file')} 
+                            onLongPress={() => handleLongPress(file, 'file')} 
+                        />, file.id
+                    )}
+                </View>
+              ))}
             </View>
-          ))}
-        </View>
+          </>
+        )}
 
       </ScrollView>
 
+      {/* --- MODALS --- */}
       <ActionModal 
         visible={actionModalVisible}
         onClose={() => {
             setActionModalVisible(false);
             setIsCreating(false); 
         }}
+        action={isCreating ? 'create' : 'edit'}
         initialMode={modalMode}
         title={isCreating ? '' : (targetFile ? targetFile.title : targetFolder?.name || '')}
-        type={(targetFile || (!isCreating && !targetFolder)) ? 'file' : 'folder'} 
+        type={(isCreating || (!targetFile && targetFolder)) ? 'folder' : 'file'}
         isPinned={targetFile?.isPinned}
-        currentColor={targetFolder?.color}
-        
+        currentColor={isCreating ? '#666666' : targetFolder?.color}
         onMove={handleOpenMove} 
 
         onDelete={() => {
@@ -296,28 +344,18 @@ export default function HomeScreen() {
             if (id) deleteItems(new Set([id]));
             setActionModalVisible(false);
         }}
-        
+
+
         onRename={(newName, newColor) => {
-            const wasCreating = isCreating;
-            const targetId = targetFile?.id || targetFolder?.id;
-
-            setActionModalVisible(false);
+            if (isCreating) {
+                createFolder(newName, null, newColor);
+            } else {
+                const targetId = targetFile?.id || targetFolder?.id;
+                if (targetId) renameItem(targetId, newName, newColor);
+            }
             setIsCreating(false);
-
-            setTimeout(() => {
-                if (wasCreating) {
-                   const newId = createFolder(newName, null);
-                   if (newColor && newId) {
-                       renameItem(newId, newName, newColor);
-                   }
-                } else {
-                   if (targetId) {
-                       renameItem(targetId, newName, newColor);
-                   }
-                }
-            }, 100);
+            setActionModalVisible(false);
         }}
-        
         onTogglePin={() => {
             if(targetFile) togglePin(targetFile.id);
             setActionModalVisible(false);
@@ -335,7 +373,7 @@ export default function HomeScreen() {
         }}
       />
 
-      {/* ✅ FIX 3: Added MoveFileModal Component here */}
+
       <MoveFileModal 
         visible={moveModalVisible}
         onClose={() => setMoveModalVisible(false)}
