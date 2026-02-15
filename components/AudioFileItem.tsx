@@ -4,6 +4,7 @@ import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View, useColorScheme } from 'react-native';
 
 interface AudioFileProps {
+  id: string;
   title: string;
   date: string;
   duration: string;

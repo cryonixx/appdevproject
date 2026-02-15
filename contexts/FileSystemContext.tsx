@@ -19,11 +19,15 @@ export interface FileSystemItem {
   id: string;
   title: string;
   type: 'file' | 'folder';
+  uri: string;
   parentId: string | null;
   date: string;
   duration: string;
   isPinned: boolean;
   color?: string;
+
+  notes?: string;
+  transcription?: string;
 }
 
 interface FileSystemContextType {
@@ -34,6 +38,8 @@ interface FileSystemContextType {
   deleteItems: (itemIds: Set<string>) => void;
   togglePin: (itemId: string) => void;
   renameItem: (itemId: string, newName: string, newColor?: string) => void;
+
+  updateFileData: (itemId: string, transcription: string, notes: string) => void;
 }
 
 const FileSystemContext = createContext<FileSystemContextType>({} as any);
@@ -94,6 +100,7 @@ const createFolder = async (name: string, parentId: string | null, color?: strin
         id: newId,
         title: name,
         type: 'folder',
+        uri: physicalPath,
         parentId: parentId,
         color: color || '#888', // 👈 USE IT HERE (Use the passed color, or default to gray)
         date: new Date().toLocaleDateString(),
@@ -111,10 +118,12 @@ const createFolder = async (name: string, parentId: string | null, color?: strin
 
   const createFile = async (name: string, parentId: string | null, duration: string = ''): Promise<string> => {
     const newId = Date.now().toString();
+    const physicalPath = RECORDINGS_DIR + newId; // This is the URI
     const newFile: FileSystemItem = {
       id: newId,
       title: name,
       type: 'file',
+      uri: physicalPath,
       parentId: parentId,
       date: new Date().toLocaleDateString(),
       duration: duration,
@@ -163,9 +172,28 @@ const createFolder = async (name: string, parentId: string | null, color?: strin
     ));
   };
 
+  // Inside FileSystemProvider...
+
+  const updateFileData = (itemId: string, transcription: string, notes: string) => {
+    setItems(prev => prev.map(item => 
+      item.id === itemId 
+        ? { ...item, transcription, notes } 
+        : item
+    ));
+  };
+
   return (
     <FileSystemContext.Provider 
-      value={{ items, createFolder, createFile, moveItems, deleteItems, togglePin, renameItem }}
+      value={{ 
+        items, 
+        createFolder, 
+        createFile, 
+        moveItems, 
+        deleteItems, 
+        togglePin, 
+        renameItem,
+        updateFileData // --- DON'T FORGET TO EXPORT IT HERE ---
+      }}
     >
       {children}
     </FileSystemContext.Provider>

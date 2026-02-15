@@ -1,10 +1,13 @@
-import { Ionicons } from '@expo/vector-icons';
-import { Stack, useRouter } from 'expo-router'; // ✅ Added useRouter
-import React, { useState } from 'react'; // ✅ Added useState
-import { StyleSheet, Text, TouchableOpacity, useColorScheme, View } from 'react-native';
+// app/record.tsx
+import { Stack, useRouter } from 'expo-router';
+import React, { useState } from 'react';
+import { StyleSheet, View, useColorScheme } from 'react-native';
 
-// --- IMPORTS ---
 import AudioNotesHeader from '@/components/AudioNotesHeader';
+import ProcessingView from '@/components/ProcessingView';
+import RecordView from '@/components/RecordView';
+import ResultView from '@/components/ResultView';
+import SaveModal from '@/components/SaveModal'; // ✅ Import Modal
 import { Colors } from '@/constants/theme';
 
 export default function RecordScreen() {
@@ -12,37 +15,27 @@ export default function RecordScreen() {
   const themeColors = Colors[colorScheme];
   const router = useRouter();
 
-  // --- MOCK STATE ---
+  const [stage, setStage] = useState<'record' | 'process' | 'done'>('record');
   const [isRecording, setIsRecording] = useState(false);
+  const [transcript, setTranscript] = useState("");
+  const [isSaveModalVisible, setIsSaveModalVisible] = useState(false); // ✅ Modal State
 
-  // --- HANDLER FUNCTIONS ---
-  
-  const handleRestart = () => {
-    console.log("🔄 Restarting...");
-    // Future: Stop current recording, discard temp file, and reset timer to 00:00
-    setIsRecording(false); 
-  };
-
-  const handleToggleRecord = () => {
-    setIsRecording((prev) => !prev);
-    if (!isRecording) {
-      console.log("🔴 Started recording!");
-      // Future: await audioRecorder.startAsync()
-    } else {
-      console.log("⏹️ Stopped recording!");
-      // Future: await audioRecorder.stopAndUnloadAsync()
-    }
-  };
-
-  const handleCancel = () => {
-    console.log("❌ Canceling and closing modal...");
-    // Future: Clean up any unsaved temporary audio files in the cache before leaving
-    router.back(); 
-  };
-
+  // --- HANDLERS ---
   const handleTranscribe = () => {
-    console.log("📝 Sending audio to NLP pipeline for transcription...");
-    // Future: Pass the saved file URI to your speech-to-text API or backend service
+    setStage('process');
+    setTimeout(() => {
+        setTranscript("Lately, I've been thinking 'bout my precarious future...");
+        setStage('done');
+    }, 2000);
+  };
+
+  const handleFinalSave = (fileName: string) => {
+    console.log("💾 ATTEMPTING SAVE:");
+    console.log("File Name:", fileName);
+    console.log("Content:", transcript);
+    
+    setIsSaveModalVisible(false);
+    // Future: Add logic here to write to file system/database
   };
 
   return (
@@ -51,128 +44,44 @@ export default function RecordScreen() {
       <AudioNotesHeader hideSettings={true} />
 
       <View style={styles.contentWrapper}>
-        
-        {/* --- TOP HALF (Placeholder for Waveform) --- */}
-        <View style={styles.topHalf}>
-          <Text style={[styles.placeholderText, { color: themeColors.text }]}>
-            {isRecording ? "Recording in progress..." : "Waveform and Timer go here"}
-          </Text>
-        </View>
+        {stage === 'record' && (
+          <RecordView 
+            isRecording={isRecording}
+            onToggleRecord={() => setIsRecording(!isRecording)}
+            onRestart={() => setIsRecording(false)}
+            onCancel={() => router.back()}
+            onTranscribe={handleTranscribe}
+          />
+        )}
 
-        {/* --- DIVIDER LINE --- */}
-        <View style={[styles.divider, { backgroundColor: themeColors.bordercolorSelected || '#EAEAEA' }]} />
+        {stage === 'process' && (
+          <ProcessingView 
+            onRestart={() => setStage('record')} 
+            onCancel={() => router.back()} 
+          />
+        )}
 
-        {/* --- BOTTOM HALF (Controls) --- */}
-        <View style={styles.bottomHalf}>
-          
-          {/* Main Controls Row */}
-          <View style={styles.controlsRow}>
-            
-            {/* RESTART BUTTON */}
-            <TouchableOpacity 
-              style={[styles.pillButton, { backgroundColor: themeColors.container }]}
-              onPress={handleRestart}
-            >
-              <Text style={[styles.pillText, { color: themeColors.text }]}>Restart</Text>
-            </TouchableOpacity>
-
-            {/* BIG PLAY/STOP BUTTON */}
-            <TouchableOpacity 
-              style={[styles.playButtonOuter, { backgroundColor: themeColors.container }]}
-              onPress={handleToggleRecord}
-            >
-              <View style={[styles.playButtonInner, { borderColor: themeColors.text }]}>
-                {/* Dynamically swap icon based on state */}
-                {isRecording ? (
-                  <Ionicons name="square" size={24} color={themeColors.text} />
-                ) : (
-                  <Ionicons name="play" size={28} color={themeColors.text} style={{ marginLeft: 4 }} />
-                )}
-              </View>
-            </TouchableOpacity>
-
-            {/* CANCEL BUTTON */}
-            <TouchableOpacity 
-              style={[styles.pillButton, { backgroundColor: themeColors.container }]}
-              onPress={handleCancel}
-            >
-              <Text style={[styles.pillText, { color: themeColors.text }]}>Cancel</Text>
-            </TouchableOpacity>
-            
-          </View>
-
-          {/* TRANSCRIBE BUTTON */}
-          <TouchableOpacity 
-            style={[styles.pillButton, { backgroundColor: themeColors.container, marginTop: 25 }]}
-            onPress={handleTranscribe}
-          >
-            <Text style={[styles.pillText, { color: themeColors.text }]}>Transcribe</Text>
-          </TouchableOpacity>
-
-        </View>
+        {stage === 'done' && (
+          <ResultView 
+            transcript={transcript}
+            onRestart={() => setStage('record')}
+            onCancel={() => router.back()}
+            onSave={() => setIsSaveModalVisible(true)} // ✅ Trigger Modal
+          />
+        )}
       </View>
+
+      {/* ✅ SAVE MODAL OVERLAY */}
+      <SaveModal 
+        isVisible={isSaveModalVisible}
+        onClose={() => setIsSaveModalVisible(false)}
+        onSave={handleFinalSave}
+      />
     </View>
   );
 }
 
-// ... [Keep your exact same styles object down here] ...
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  contentWrapper: {
-    flex: 1, 
-  },
-  topHalf: {
-    flex: 1.2, 
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  placeholderText: {
-    fontSize: 18,
-    opacity: 0.3,
-    fontWeight: '500',
-  },
-  divider: {
-    height: 1,
-    width: '100%',
-    opacity: 0.5, 
-  },
-  bottomHalf: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingBottom: 20, 
-  },
-  controlsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-evenly',
-    width: '100%',
-    paddingHorizontal: 20,
-  },
-  pillButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 25, 
-  },
-  pillText: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  playButtonOuter: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  playButtonInner: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    borderWidth: 3, 
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  container: { flex: 1 },
+  contentWrapper: { flex: 1 },
 });

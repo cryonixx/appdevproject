@@ -13,6 +13,7 @@ import { Colors } from "@/constants/theme";
 import ActionModal from '@/components/ActionModal';
 import AudioFile from '@/components/AudioFileItem';
 import Folder, { FolderData } from '@/components/folder';
+import Notes from '@/components/Notes';
 
 import MoveFileModal from '@/components/MoveFileModal';
 
@@ -45,6 +46,7 @@ export default function HomeScreen() {
   const [moveModalVisible, setMoveModalVisible] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [modalMode, setModalMode] = useState<'menu' | 'rename'>('menu');
+  const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
 
   // --- SELECTION ---
   const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -124,8 +126,8 @@ export default function HomeScreen() {
       if (type === 'folder') {
         router.push(`/folder/${id}`)
       } else {
-        console.log(`Playing file ${id}`);
-        // Add your playback logic here
+        console.log(`Opening notes for file ${id}`);
+        setSelectedFileId(id); // <--- This triggers the modal
       }
     }
   };  
@@ -325,6 +327,13 @@ export default function HomeScreen() {
       </ScrollView>
 
       {/* --- MODALS --- */}
+
+      <Notes 
+        visible={!!selectedFileId} // visible is true if selectedFileId is not null
+        audioFileId={selectedFileId}
+        onClose={() => setSelectedFileId(null)} // Reset state to close
+      />
+
       <ActionModal 
         visible={actionModalVisible}
         onClose={() => {
