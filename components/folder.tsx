@@ -1,46 +1,47 @@
 import { Colors } from "@/constants/theme";
-import { Ionicons } from '@expo/vector-icons';
-import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, useColorScheme } from 'react-native';
+import { Ionicons } from "@expo/vector-icons";
+import React from "react";
+import {
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  useColorScheme,
+} from "react-native";
 
 export interface FolderData {
   id: string;
   name: string;
   color?: string;
   // 👇 ADD THIS LINE so folders can be moved into other folders
-  folderId?: string | null; 
+  folderId?: string | null;
 }
 
 interface FolderProps {
   data: FolderData;
   onPress: (id: string) => void;
-  onLongPress: (folder: FolderData) => void; 
+  onLongPress: (folder: FolderData) => void;
 }
 
 export default function Folder({ data, onPress, onLongPress }: FolderProps) {
-  const colorScheme = useColorScheme() ?? 'light';
+  const colorScheme = useColorScheme() ?? "light";
   const themeColors = Colors[colorScheme] || Colors.light;
 
-  const iconColor = data.color || '#007AFF';
+  const iconColor = data.color || "#007AFF";
 
   return (
-    <TouchableOpacity 
-      style={[
-        styles.container, 
-        { backgroundColor: 'transparent'} 
-      ]}
+    <TouchableOpacity
+      style={[styles.container, { backgroundColor: "transparent" }]}
       onPress={() => onPress(data.id)}
       onLongPress={() => onLongPress(data)}
-      delayLongPress={200} 
+      delayLongPress={200}
       activeOpacity={0.7}
     >
-      <Ionicons 
-        name="folder" 
-        size={95} 
-        color={iconColor} 
-      />
+      <Ionicons name="folder" size={95} color={iconColor} />
 
-      <Text style={[styles.folderName, { color: themeColors.text }]} numberOfLines={1}>
+      <Text
+        style={[styles.folderName, { color: themeColors.text }]}
+        numberOfLines={1}
+      >
         {data.name}
       </Text>
     </TouchableOpacity>
@@ -49,8 +50,8 @@ export default function Folder({ data, onPress, onLongPress }: FolderProps) {
 
 const styles = StyleSheet.create({
   container: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginRight: 20,
     width: 100,
     padding: 5,
@@ -59,7 +60,7 @@ const styles = StyleSheet.create({
   folderName: {
     marginTop: -10,
     fontSize: 12,
-    fontWeight: '500',
-    textAlign: 'center',
+    fontWeight: "500",
+    textAlign: "center",
   },
 });

@@ -10,5 +10,5 @@ export const EventBus = {
     return () => {
       listeners.delete(callback);
     };
-  }
+  },
 };

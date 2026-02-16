@@ -2,7 +2,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { AudioModule } from "expo-audio";
 import { Stack, useRouter } from "expo-router"; // ✅ Added useRouter
 import {
-  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -13,8 +12,10 @@ import {
 // --- IMPORTS ---
 import AudioNotesHeader from "@/components/AudioNotesHeader";
 import { Colors } from "@/constants/theme";
-import { useTranscribeRecording } from "@/hooks/transcribeRecording";
+// import { useTranscribeRecording } from "@/hooks/transcribeRecording";
 import { useAudioRecorderHook } from "@/hooks/useAudioRecorderHook";
+import { useWhisperModels } from "@/hooks/useWhisperModels";
+import { useEffect } from "react";
 
 export default function RecordScreen() {
   const colorScheme = useColorScheme() ?? "light";
@@ -29,12 +30,42 @@ export default function RecordScreen() {
     discardRecording,
     isRecording,
   } = useAudioRecorderHook();
+
   const {
-    transcribeAudio,
-    startRealtimeTranscription,
-    stopRealtimeTranscription,
-    isRealtimeRecording,
-  } = useTranscribeRecording();
+    //State
+    modelFiles,
+    isDownloading,
+    downloadProgress,
+    isInitialized,
+    whisperContext,
+    vadContext,
+    currentModelId,
+
+    // Helpers
+    getModelById,
+    getCurrentModel,
+    isModelDownloaded,
+    getDownloadProgress,
+
+    //Actions
+    downloadModel,
+    initializeWhisperModel,
+
+    availableModels: WHISPER_MODELS,
+  } = useWhisperModels();
+
+  const initializeModel = async (modelId: string = "base") => {
+    try {
+      await initializeWhisperModel(modelId);
+    } catch (e) {
+      console.log(e);
+    }
+  };
+
+  useEffect(() => {
+    // Initialize the default model when the component mounts
+    initializeModel();
+  }, []);
 
   // --- HANDLER FUNCTIONS ---
 
@@ -80,19 +111,19 @@ export default function RecordScreen() {
 
   const handleTranscribe = async () => {
     console.log("📝 Transcribing...");
-    if (Platform.OS === "android") {
-      if (isRealtimeRecording) {
-        stopRealtimeTranscription();
-        return;
-      }
-      await startRealtimeTranscription();
-      return;
-    }
-    if (!audioUri) {
-      console.error("No audio URI available to transcribe");
-      return;
-    }
-    await transcribeAudio(audioUri);
+    // if (Platform.OS === "android") {
+    //   if (isRealtimeRecording) {
+    //     stopRealtimeTranscription();
+    //     return;
+    //   }
+    //   await startRealtimeTranscription();
+    //   return;
+    // }
+    // if (!audioUri) {
+    //   console.error("No audio URI available to transcribe");
+    //   return;
+    // }
+    // await transcribeAudio(audioUri);
   };
 
   return (
@@ -103,13 +134,35 @@ export default function RecordScreen() {
       <AudioNotesHeader hideSettings={true} />
 
       <View style={styles.contentWrapper}>
-        {/* --- TOP HALF (Placeholder for Waveform) --- */}
+        {/* --- TOP HALF (Waveform/Transcription Area) --- */}
         <View style={styles.topHalf}>
+          {/* Previous placeholder kept for reference */}
+          {/*
           <Text style={[styles.placeholderText, { color: themeColors.text }]}>
             {isRecording
               ? "Recording in progress..."
               : "Waveform and Timer go here"}
           </Text>
+          */}
+          <View
+            style={[
+              styles.transcriptionBox,
+              { backgroundColor: themeColors.container },
+            ]}
+          >
+            <Text
+              style={[styles.transcriptionTitle, { color: themeColors.text }]}
+            >
+              Transcription
+            </Text>
+            <Text
+              style={[styles.transcriptionText, { color: themeColors.text }]}
+            >
+              {isRecording
+                ? "Listening..."
+                : "Your transcription will appear here."}
+            </Text>
+          </View>
         </View>
 
         {/* --- DIVIDER LINE --- */}
@@ -208,6 +261,23 @@ const styles = StyleSheet.create({
     flex: 1.2,
     justifyContent: "center",
     alignItems: "center",
+  },
+  transcriptionBox: {
+    width: "90%",
+    minHeight: 140,
+    borderRadius: 16,
+    padding: 16,
+    justifyContent: "flex-start",
+  },
+  transcriptionTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    marginBottom: 8,
+  },
+  transcriptionText: {
+    fontSize: 15,
+    lineHeight: 22,
+    opacity: 0.8,
   },
   placeholderText: {
     fontSize: 18,

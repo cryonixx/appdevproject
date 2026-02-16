@@ -1,5 +1,9 @@
+<<<<<<< HEAD
 import * as FileSystem from 'expo-file-system/legacy';
 import React, { createContext, useContext, useEffect, useState } from 'react';
+=======
+import React, { createContext, useContext, useState } from "react";
+>>>>>>> 8dc6885 (feat: created the useWhisperModels hook)
 
 // --- 🔴 THE FIX STARTS HERE ---
 // We force TypeScript to treat FileSystem as 'any', ignoring the missing type definition.
@@ -18,7 +22,7 @@ const RECORDINGS_DIR = rootDir + 'recordings/';
 export interface FileSystemItem {
   id: string;
   title: string;
-  type: 'file' | 'folder';
+  type: "file" | "folder";
   parentId: string | null;
   date: string;
   duration: string;
@@ -28,16 +32,26 @@ export interface FileSystemItem {
 
 interface FileSystemContextType {
   items: FileSystemItem[];
+<<<<<<< HEAD
   createFolder: (name: string, parentId: string | null, color?: string) => Promise<string>;
   createFile: (name: string, parentId: string | null, duration?: string) => Promise<string>;
   moveItems: (itemIds: Set<string>, targetFolderId: string | null) => void;
   deleteItems: (itemIds: Set<string>) => void;
   togglePin: (itemId: string) => void;
+=======
+  // ✅ FIX 1: Changed void to string
+  createFolder: (name: string, parentId: string | null) => string;
+  moveItems: (itemIds: Set<string>, targetFolderId: string | null) => void;
+  deleteItems: (itemIds: Set<string>) => void;
+  togglePin: (itemId: string) => void;
+  // ✅ FIX 2: Added optional newColor parameter
+>>>>>>> 8dc6885 (feat: created the useWhisperModels hook)
   renameItem: (itemId: string, newName: string, newColor?: string) => void;
 }
 
 const FileSystemContext = createContext<FileSystemContextType>({} as any);
 
+<<<<<<< HEAD
 export function FileSystemProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<FileSystemItem[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -149,13 +163,78 @@ const createFolder = async (name: string, parentId: string | null, color?: strin
       }
     }
     setItems(prev => prev.filter(i => !idsToDelete.has(i.id)));
+=======
+export function FileSystemProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const [items, setItems] = useState<FileSystemItem[]>([
+    {
+      id: "1",
+      title: "AppDev",
+      type: "folder",
+      parentId: null,
+      color: "#666666",
+      date: "",
+      duration: "",
+      isPinned: false,
+    },
+    {
+      id: "101",
+      title: "New Record",
+      type: "file",
+      parentId: null,
+      date: "01/31/26",
+      duration: "20:00",
+      isPinned: false,
+    },
+  ]);
+
+  // 1. Create Folder
+  const createFolder = (name: string, parentId: string | null): string => {
+    // ✅ FIX 3: Ensure we generate the ID once and use it for both the item and the return
+    const newId = Date.now().toString();
+    const newFolder: FileSystemItem = {
+      id: newId, // Use the same generated ID
+      title: name,
+      type: "folder",
+      parentId: parentId,
+      color: "#888",
+      date: new Date().toLocaleDateString(),
+      duration: "",
+      isPinned: false,
+    };
+    setItems((prev) => [...prev, newFolder]);
+    return newId;
+  };
+
+  // 2. Move Items
+  const moveItems = (itemIds: Set<string>, targetFolderId: string | null) => {
+    setItems((prev) =>
+      prev.map((item) => {
+        if (itemIds.has(item.id)) {
+          if (item.id === targetFolderId) return item;
+          return { ...item, parentId: targetFolderId };
+        }
+        return item;
+      }),
+    );
+  };
+
+  const deleteItems = (ids: Set<string>) => {
+    setItems((prev) => prev.filter((i) => !ids.has(i.id)));
+>>>>>>> 8dc6885 (feat: created the useWhisperModels hook)
   };
 
   const togglePin = (id: string) => {
-    setItems(prev => prev.map(i => i.id === id ? { ...i, isPinned: !i.isPinned } : i));
+    setItems((prev) =>
+      prev.map((i) => (i.id === id ? { ...i, isPinned: !i.isPinned } : i)),
+    );
   };
 
   const renameItem = (id: string, newTitle: string, newColor?: string) => {
+<<<<<<< HEAD
     setItems(prev => prev.map(item =>
       item.id === id
         ? { ...item, title: newTitle, color: newColor || item.color }
@@ -166,6 +245,27 @@ const createFolder = async (name: string, parentId: string | null, color?: strin
   return (
     <FileSystemContext.Provider 
       value={{ items, createFolder, createFile, moveItems, deleteItems, togglePin, renameItem }}
+=======
+    setItems((prev) =>
+      prev.map((item) =>
+        item.id === id
+          ? { ...item, title: newTitle, color: newColor || item.color }
+          : item,
+      ),
+    );
+  };
+
+  return (
+    <FileSystemContext.Provider
+      value={{
+        items,
+        createFolder,
+        moveItems,
+        deleteItems,
+        togglePin,
+        renameItem,
+      }}
+>>>>>>> 8dc6885 (feat: created the useWhisperModels hook)
     >
       {children}
     </FileSystemContext.Provider>
