@@ -1,25 +1,23 @@
 import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
-import { Alert, FlatList, Modal, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, useColorScheme, View } from 'react-native';
+import { Alert, FlatList, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, useColorScheme, View } from 'react-native';
 
 // --- IMPORTS ---
 import { EventBus } from '@/constants/eventsBus';
 import { Colors } from "@/constants/theme";
 
-  
-
 // ✅ CUSTOM COMPONENTS
 import ActionModal from '@/components/ActionModal';
 import AudioFile from '@/components/AudioFileItem';
 import Folder, { FolderData } from '@/components/folder';
-import Notes from '@/components/Notes';
-
 import MoveFileModal from '@/components/MoveFileModal';
+import Notes from '@/components/Notes';
+import OptionsModal from '@/components/OptionsModal';
 
 // ✅ IMPORT CONTEXTS
 import { useFileSystem } from '@/contexts/FileSystemContext';
-import { useSearch } from '@/contexts/SearchContext'; // 👈 IMPORT SEARCH CONTEXT
+import { useSearch } from '@/contexts/SearchContext';
 
 // --- TYPES ---
 interface RecordingFile {
@@ -32,13 +30,11 @@ interface ExtendedFolderData extends FolderData {
 export default function HomeScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme() ?? 'light';
-
   const themeColors = Colors[colorScheme] || Colors.light;
-  
 
   // --- CONTEXT HOOKS ---
   const { items, createFolder, moveItems, deleteItems, togglePin, renameItem } = useFileSystem();
-  const { searchQuery } = useSearch(); // 👈 GET SEARCH QUERY
+  const { searchQuery } = useSearch();
 
   // --- UI STATES ---
   const [actionModalVisible, setActionModalVisible] = useState(false);
@@ -75,10 +71,8 @@ export default function HomeScreen() {
     const filtered = items.filter(item => 
       item.title.toLowerCase().includes(searchQuery.toLowerCase())
     );
-
-    // ✅ DEBUG INDICATOR: Watch your terminal to see the search working in real-time
-    console.log(`Search: "${searchQuery}" | Matches: ${filtered.length}`);
     
+    console.log(`Search: "${searchQuery}" | Matches: ${filtered.length}`);
     return filtered;
   }, [items, searchQuery]);
 
@@ -95,8 +89,11 @@ export default function HomeScreen() {
     .filter(i => i.type === 'file' && i.isPinned && i.parentId === null) 
     .map(i => ({ id: i.id, title: i.title, date: i.date, duration: i.duration, isPinned: i.isPinned, folderId: i.parentId })), [items]);
 
+  // ✅ UPDATED: Sort Recent Files by Date (Newest First)
   const recentFiles = React.useMemo(() => items
     .filter(i => i.type === 'file' && !i.isPinned && i.parentId === null)
+    // 👇 This line handles the sorting logic
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     .map(i => ({ id: i.id, title: i.title, date: i.date, duration: i.duration, isPinned: i.isPinned, folderId: i.parentId })), [items]);
 
 
@@ -127,7 +124,7 @@ export default function HomeScreen() {
         router.push(`/folder/${id}`)
       } else {
         console.log(`Opening notes for file ${id}`);
-        setSelectedFileId(id); // <--- This triggers the modal
+        setSelectedFileId(id);
       }
     }
   };  
@@ -203,13 +200,11 @@ export default function HomeScreen() {
     ]);
   };
 
-
   const getMovingItems = () => {
     if (isSelectionMode) return selectedIds;
     const id = targetFile?.id || targetFolder?.id;
     return id ? new Set([id]) : new Set<string>();
   };
-
 
   const availableFolders = items
     .filter(i => i.type === 'folder' && !getMovingItems().has(i.id))
@@ -227,13 +222,11 @@ export default function HomeScreen() {
         {searchQuery.length > 0 ? (
           // --- SEARCH MODE ---
           <View style={{ paddingHorizontal: 22, paddingTop: 20 }}>
-            {/* ✅ VISUAL INDICATOR: Shows exactly how many items were found */}
             <Text style={[styles.sectionTitle, { marginLeft: 0, color: themeColors.text }]}>
               Search Results ({searchResults.length})
             </Text>
             
             {searchResults.length === 0 ? (
-               // ✅ EMPTY STATE INDICATOR: Confirms search ran but found nothing
                <View style={{ alignItems: 'center', marginTop: 50 }}>
                   <Text style={{ color: '#999', fontSize: 16 }}>No items found matching "{searchQuery}"</Text>
                </View>
@@ -329,9 +322,9 @@ export default function HomeScreen() {
       {/* --- MODALS --- */}
 
       <Notes 
-        visible={!!selectedFileId} // visible is true if selectedFileId is not null
+        visible={!!selectedFileId} 
         audioFileId={selectedFileId}
-        onClose={() => setSelectedFileId(null)} // Reset state to close
+        onClose={() => setSelectedFileId(null)} 
       />
 
       <ActionModal 
@@ -353,7 +346,6 @@ export default function HomeScreen() {
             if (id) deleteItems(new Set([id]));
             setActionModalVisible(false);
         }}
-
 
         onRename={(newName, newColor) => {
             if (isCreating) {
@@ -381,7 +373,6 @@ export default function HomeScreen() {
           setSelectedIds(new Set()); 
         }}
       />
-
 
       <MoveFileModal 
         visible={moveModalVisible}
@@ -415,35 +406,7 @@ export default function HomeScreen() {
   );
 }
 
-// --- INTERNAL COMPONENT: OptionsModal ---
-function OptionsModal({ visible, onClose, onCreateFolder, onEnterSelectionMode }: any) {
-  const theme = useColorScheme() ?? 'light';
-  const themeColors = Colors[theme];
-
-  return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={onClose}>
-        <View style={[styles.menuContainer, { backgroundColor: themeColors.container }]}>
-
-          <Text style={[styles.menuHeader, { color: themeColors.text }]}>Options</Text>
-          
-          <TouchableOpacity style={styles.menuOption} onPress={onCreateFolder}>
-            <Text style={{ fontSize: 16, color: themeColors.tint, fontWeight: '600' }}>+ Create New Folder</Text>
-          </TouchableOpacity>
-          
-          <View style={{ height: 1, backgroundColor: '#ccc', opacity: 0.2, width: '100%' }} />
-
-          <TouchableOpacity style={styles.menuOption} onPress={onEnterSelectionMode}>
-            <Text style={{ fontSize: 16, color: themeColors.text }}>Select Items</Text>
-          </TouchableOpacity>
-
-        </View>
-      </TouchableOpacity>
-    </Modal>
-  );
-}
-
-// --- STYLES ---
+// ... styles remain the same
 const styles = StyleSheet.create({
   sectionTitle: { fontSize: 22, fontWeight: 'bold', marginLeft: 22, marginBottom: 15 },
   listContainer: { marginBottom: 5 },

@@ -51,8 +51,21 @@ export default function Notes({ visible, audioFileId, onClose }: NotesProps) {
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [position, setPosition] = useState(0); 
-  const [duration, setDuration] = useState(0); 
-
+  const [duration, setDuration] = useState(0);
+  
+  useEffect(() => {
+    if (!visible || !audioFileId) {
+      if (sound) {
+        console.log("Unloading sound...");
+        sound.unloadAsync(); // Stop audio from memory
+      }
+      setSound(null);        // Clear the state variable
+      setIsPlaying(false);   // Reset UI controls
+      setPosition(0);
+      setDuration(0);
+    }
+  }, [visible, audioFileId]);
+ 
   useEffect(() => {
     if (audioFile) {
       setTranscription(audioFile.transcription || '');

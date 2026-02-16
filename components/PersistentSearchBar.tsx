@@ -20,12 +20,17 @@ import {
   View
 } from 'react-native';
 
-
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-export default function PersistentSearchBar() {
+// 1. 👇 Define Props Interface
+interface PersistentSearchBarProps {
+  currentFolderId?: string | null; // Optional: It can be a string (Folder ID) or null (Root)
+}
+
+// 2. 👇 Accept the prop in the function definition
+export default function PersistentSearchBar({ currentFolderId = null }: PersistentSearchBarProps) {
   const colorScheme = useColorScheme() ?? 'light';
   const themeColors = Colors[colorScheme] || Colors.light;
   
@@ -35,10 +40,8 @@ export default function PersistentSearchBar() {
   const { createFile } = useFileSystem(); 
   const { searchQuery, setSearchQuery } = useSearch();
 
-  // 1. 👇 LOCAL STATE: This is what keeps the text from deleting!
   const [localText, setLocalText] = useState(searchQuery);
 
-  // 2. 👇 SYNC: If the global search is cleared (from elsewhere), update local
   useEffect(() => {
     setLocalText(searchQuery);
   }, [searchQuery]);
@@ -68,8 +71,8 @@ export default function PersistentSearchBar() {
   };
 
   const handleTextChange = (text: string) => {
-    setLocalText(text);      // Fast UI update (text won't disappear)
-    setSearchQuery(text);    // Slow background update (filtering)
+    setLocalText(text);     
+    setSearchQuery(text);    
   };
 
   const handleClear = () => {
@@ -77,11 +80,10 @@ export default function PersistentSearchBar() {
     setSearchQuery('');
   };
 
-  // ... (keep handleImportAudio logic exactly as you had it) ...
-  const handleImportAudio = async () => { try {
-      // A. Open System File Picker
+  const handleImportAudio = async () => {
+    try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: 'audio/*', // Only allow audio files
+        type: 'audio/*', 
         copyToCacheDirectory: true,
       });
 
@@ -89,32 +91,34 @@ export default function PersistentSearchBar() {
 
       const { uri, name, size } = result.assets[0];
 
-      // Optional: Check file size (limit to 50MB for example)
       if (size && size > 50 * 1024 * 1024) {
         Alert.alert("File too large", "Please select a file under 50MB.");
         return;
       }
 
-      // B. Create Entry in Context (Metadata)
-      // We pass 'null' as parentId to put it in the root folder
-      // We pass the file name as the title
-      const newId = await createFile(name, null, "Imported"); 
+      // 3. 👇 USE THE PROP HERE!
+      // Instead of hardcoding 'null', we use 'currentFolderId'.
+      // If we are on Home, it's null. If in a folder, it's that folder's ID.
+      const newId = await createFile(name, currentFolderId, "Imported"); 
 
-      // C. Determine Paths
       const FS = FileSystem as any;
       const rootDir = FS.documentDirectory || FS.cacheDirectory;
-      const destinationUri = rootDir + 'recordings/' + newId;
+      const recordingsFolder = rootDir + 'recordings/';
+      const destinationUri = recordingsFolder + newId + '.m4a';
 
-      // D. Copy the file from external storage to our sandbox
+      const dirInfo = await FS.getInfoAsync(recordingsFolder);
+      if (!dirInfo.exists) {
+        await FS.makeDirectoryAsync(recordingsFolder, { intermediates: true });
+      }
+
       await FileSystem.copyAsync({
         from: uri,
         to: destinationUri
       });
 
-      // E. Close menu and notify user
       setIsExpanded(false);
-      // Optional: Navigate to home or show success toast
       console.log("Import success:", destinationUri);
+      Alert.alert("Success", "Audio imported successfully!");
 
     } catch (error) {
       console.error("Import failed:", error);
@@ -140,17 +144,12 @@ export default function PersistentSearchBar() {
               placeholder="Search"
               placeholderTextColor={themeColors.lightext}
               style={{ flex: 1, fontSize: 16, color: themeColors.text, textAlign: 'center' }}
-              
-              // 3. 👇 USE LOCAL TEXT
               value={localText} 
               onChangeText={handleTextChange}
-              
-              // 4. 👇 PREVENT GLITCHES
               autoCorrect={false}
               autoCapitalize="none"
           />
 
-          {/* 5. 👇 THE CLEAR BUTTON: It will show up now! */}
           {localText.length > 0 && (
             <TouchableOpacity onPress={handleClear} style={{ padding: 5 }}>
               <Ionicons name="close-circle" size={22} color={themeColors.text} />
@@ -172,7 +171,6 @@ export default function PersistentSearchBar() {
 
       {isExpanded && (
         <View style={styles.unifiedButtonGroup}>
-          {/* ... (Keep your action buttons exactly the same) ... */}
           <TouchableOpacity 
             style={[styles.actionButton, styles.topButton, { backgroundColor: themeColors.container }]}
             onPress={() => router.push('/recording_codes/record')}
@@ -195,8 +193,6 @@ export default function PersistentSearchBar() {
     </View>
   );
 }
-
-// ... styles remain the same
 
 const styles = StyleSheet.create({
   bottomBar: {
@@ -237,7 +233,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 15,
   },
-  
   topButton: {
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,

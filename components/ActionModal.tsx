@@ -8,29 +8,27 @@ import {
 interface ActionModalProps {
   visible: boolean;
   onClose: () => void;
-  onMove?: () => void; // 👈 Add this new prop
-
+  onMove?: () => void;
+  
   title: string;
   isPinned?: boolean;
   type: 'file' | 'folder' | null;
-  // 👇 Add currentColor prop
-  currentColor?: string; 
-  
+  currentColor?: string;
 
- 
+  // 👇 ADD THIS PROP
+  action?: 'create' | 'edit'; 
+
   onDelete: () => void;
-  // 👇 Update onRename to accept color too
-  onRename: (newName: string, newColor?: string) => void; 
+  onRename: (newName: string, newColor?: string) => void;
   onTogglePin?: () => void;
   initialMode?: 'menu' | 'rename'; 
 }
 
-
-
 export default function ActionModal({ 
   visible, onClose, title, isPinned, type, currentColor,
   onDelete, onRename, onTogglePin, onMove,
-  initialMode = 'menu' 
+  initialMode = 'menu',
+  action = 'edit' // 👈 DEFAULT TO EDIT
 }: ActionModalProps) {
   
   const colorScheme = useColorScheme() ?? 'light';
@@ -38,25 +36,29 @@ export default function ActionModal({
 
   const [mode, setMode] = useState<'menu' | 'rename'>('menu');
   const [inputText, setInputText] = useState('');
-  // 👇 State for selected color
   const [selectedColor, setSelectedColor] = useState(currentColor || '#666666');
-
   
   useEffect(() => {
     if (visible) {
       setMode(initialMode); 
       setInputText(title);
-      // Reset color to passed prop or default
       setSelectedColor(currentColor || '#666666');
     }
   }, [visible, title, initialMode, currentColor]);
 
   const handleSave = () => {
     if (inputText.trim()) {
-      // 👇 Pass back both name and color
       onRename(inputText, selectedColor);
     }
+  };
 
+  // Helper to determine Header Text
+  const getHeaderText = () => {
+    if (mode === 'rename') {
+      if (action === 'create') return "New Folder";
+      return type === 'folder' ? "Edit Folder" : "Rename File";
+    }
+    return title;
   };
 
   return (
@@ -72,12 +74,12 @@ export default function ActionModal({
       >
         <View style={[styles.modalContent, { backgroundColor: themeColors.container }]}>
           
+          {/* 👇 UPDATED HEADER LOGIC */}
           <Text style={[styles.modalHeader, { color: themeColors.text }]}>
-            {mode === 'rename' ? (type === 'folder' ? "Edit Folder" : "Rename File") : title}
+            {getHeaderText()}
           </Text>
 
           {mode === 'rename' ? (
-            // --- RENAME & COLOR MODE ---
             <>
               <TextInput 
                 placeholder="Enter Name..."
@@ -89,7 +91,6 @@ export default function ActionModal({
                 selectTextOnFocus={true}
               />
 
-              {/* 👇 COLOR PICKER (Only show for folders) */}
               {type === 'folder' && (
                 <View style={styles.colorContainer}>
                   <Text style={[styles.colorLabel, { color: themeColors.text }]}>Color:</Text>
@@ -100,7 +101,7 @@ export default function ActionModal({
                         style={[
                           styles.colorCircle, 
                           { backgroundColor: color },
-                          selectedColor === color && styles.colorSelected // Highlight selected
+                          selectedColor === color && styles.colorSelected 
                         ]}
                         onPress={() => setSelectedColor(color)}
                       />
@@ -114,49 +115,52 @@ export default function ActionModal({
                   <Text style={{ color: themeColors.text }}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={[styles.modalBtn, { backgroundColor: 'rgba(150,150,150,0.1)' }]} onPress={handleSave}>
-                  <Text style={{ color: themeColors.text }}>Save</Text>
+                  {/* 👇 BUTTON SAYS CREATE OR SAVE */}
+                  <Text style={{ color: themeColors.text }}>
+                    {action === 'create' ? "Create" : "Save"}
+                  </Text>
                 </TouchableOpacity>
               </View>
             </>
           ) : (
-            // --- MENU MODE ---
+             // ... (Keep your existing Menu Mode code here, it is unchanged) ...
+             // Just copy the Menu Mode section from your previous code
             <>
               {type === 'file' && onTogglePin && (
-                <>
-                  <TouchableOpacity style={styles.optionRow} onPress={onTogglePin}>
-                    <Text style={[styles.optionText, { color: themeColors.text }]}>
-                      {isPinned ? "Unpin Note" : "Pin to Top"}
-                    </Text>
-                  </TouchableOpacity>
-                  <View style={styles.divider} />
-                </>
-              )}
+               <>
+                 <TouchableOpacity style={styles.optionRow} onPress={onTogglePin}>
+                   <Text style={[styles.optionText, { color: themeColors.text }]}>
+                     {isPinned ? "Unpin Note" : "Pin to Top"}
+                   </Text>
+                 </TouchableOpacity>
+                 <View style={styles.divider} />
+               </>
+             )}
 
-              <TouchableOpacity style={styles.optionRow} onPress={() => setMode('rename')}>
-                <Text style={[styles.optionText, { color: themeColors.text }]}>
-                   {type === 'folder' ? "Rename & Color" : "Rename"}
-                </Text>
-              </TouchableOpacity>
+             <TouchableOpacity style={styles.optionRow} onPress={() => setMode('rename')}>
+               <Text style={[styles.optionText, { color: themeColors.text }]}>
+                  {type === 'folder' ? "Rename & Color" : "Rename"}
+               </Text>
+             </TouchableOpacity>
 
-              <View style={styles.divider} />
+             <View style={styles.divider} />
 
-              {/* Add this BEFORE the Delete button */}
-              <TouchableOpacity style={styles.optionRow} onPress={onMove}>
-                <Text style={[styles.optionText, { color: themeColors.text }]}>Move to Folder</Text>
-              </TouchableOpacity>
+             <TouchableOpacity style={styles.optionRow} onPress={onMove}>
+               <Text style={[styles.optionText, { color: themeColors.text }]}>Move to Folder</Text>
+             </TouchableOpacity>
 
-              <View style={styles.divider} />
+             <View style={styles.divider} />
 
-              <TouchableOpacity style={styles.optionRow} onPress={onDelete}>
-                <Text style={[styles.optionText, { color: 'red' }]}>Delete</Text>
-              </TouchableOpacity>
+             <TouchableOpacity style={styles.optionRow} onPress={onDelete}>
+               <Text style={[styles.optionText, { color: 'red' }]}>Delete</Text>
+             </TouchableOpacity>
 
-              <View style={[styles.divider, { marginTop: 10 }]} />
-              
-              <TouchableOpacity style={styles.optionRow} onPress={onClose}>
-                <Text style={[styles.optionText, { color: themeColors.lightext }]}>Cancel</Text>
-              </TouchableOpacity>
-            </>
+             <View style={[styles.divider, { marginTop: 10 }]} />
+             
+             <TouchableOpacity style={styles.optionRow} onPress={onClose}>
+               <Text style={[styles.optionText, { color: themeColors.lightext }]}>Cancel</Text>
+             </TouchableOpacity>
+           </>
           )}
 
         </View>
@@ -166,23 +170,15 @@ export default function ActionModal({
 }
 
 const styles = StyleSheet.create({
-  modalOverlay: {
-    flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center',
-  },
-  modalContent: {
-    width: '80%', borderRadius: 20, padding: 20, elevation: 5,
-  },
-  modalHeader: {
-    fontSize: 18, fontWeight: 'bold', marginBottom: 20, textAlign: 'center',
-  },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+  modalContent: { width: '80%', borderRadius: 20, padding: 20, elevation: 5 },
+  modalHeader: { fontSize: 18, fontWeight: 'bold', marginBottom: 20, textAlign: 'center' },
   optionRow: { paddingVertical: 15, alignItems: 'center' },
   optionText: { fontSize: 16, fontWeight: '500' },
   divider: { height: 1, backgroundColor: 'rgba(150,150,150,0.2)', width: '100%' },
   input: { borderWidth: 1, borderRadius: 10, padding: 10, fontSize: 16, marginBottom: 20 },
   modalButtons: { flexDirection: 'row', justifyContent: 'space-between', gap: 10 },
   modalBtn: { flex: 1, padding: 12, borderRadius: 10, alignItems: 'center', backgroundColor: 'rgba(150,150,150,0.1)' },
-  
-  // 👇 New Styles for Color Picker
   colorContainer: { marginBottom: 20 },
   colorLabel: { fontSize: 14, marginBottom: 10, fontWeight: '600' },
   colorRow: { flexDirection: 'row', justifyContent: 'space-between' },

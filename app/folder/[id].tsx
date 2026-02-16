@@ -11,6 +11,7 @@ import { Redirect, Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import ActionModal from '@/components/ActionModal';
 import AudioFile from '@/components/AudioFileItem';
 import MoveFileModal from '@/components/MoveFileModal';
+import Notes from '@/components/Notes'; // 👈 Add this
 import OptionsModal from '@/components/OptionsModal';
 import PersistentSearchBar from '@/components/PersistentSearchBar'; // ✅ 1. IMPORT ADDED HERE
 import { EventBus } from '@/constants/eventsBus';
@@ -35,6 +36,7 @@ export default function FolderScreen() {
     const [targetItem, setTargetItem] = useState<FileSystemItem | null>(null);
     const [modalMode, setModalMode] = useState<'menu' | 'rename'>('menu');
     const { searchQuery } = useSearch();
+    const [selectedFileId, setSelectedFileId] = useState<string | null>(null);  
 
     // --- SELECTION STATES ---
     const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -89,7 +91,7 @@ export default function FolderScreen() {
             if (item?.type === 'folder') {
                 router.push(`/folder/${id}`);
             } else {
-                console.log("Play", id);
+                setSelectedFileId(id);
             }
         }
     };
@@ -365,7 +367,7 @@ export default function FolderScreen() {
                     </View>
                 </View>
             ) : (
-                <PersistentSearchBar />
+                <PersistentSearchBar currentFolderId={id} />
             )}
 
             {/* --- MODALS --- */}
@@ -378,6 +380,12 @@ export default function FolderScreen() {
                     setIsSelectionMode(true);
                 }}
             /> 
+
+            <Notes 
+                visible={!!selectedFileId} 
+                audioFileId={selectedFileId}
+                onClose={() => setSelectedFileId(null)} 
+            />
 
             <ActionModal 
                 visible={actionModalVisible}

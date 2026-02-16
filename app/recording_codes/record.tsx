@@ -1,41 +1,154 @@
-// app/record.tsx
+import { Audio } from 'expo-av';
+import * as FileSystem from 'expo-file-system/legacy'; // Ensure using legacy if that's your setup
 import { Stack, useRouter } from 'expo-router';
-import React, { useState } from 'react';
-import { StyleSheet, View, useColorScheme } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Alert, StyleSheet, View, useColorScheme } from 'react-native';
 
 import AudioNotesHeader from '@/components/AudioNotesHeader';
 import ProcessingView from '@/components/ProcessingView';
 import RecordView from '@/components/RecordView';
 import ResultView from '@/components/ResultView';
-import SaveModal from '@/components/SaveModal'; // ✅ Import Modal
+import SaveModal from '@/components/SaveModal';
 import { Colors } from '@/constants/theme';
+
+// 👇 1. IMPORT YOUR CONTEXT
+import { useFileSystem } from '@/contexts/FileSystemContext';
+
+const formatTime = (seconds: number) => {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins < 10 ? '0' : ''}${mins}:${secs < 10 ? '0' : ''}${secs}`;
+};
 
 export default function RecordScreen() {
   const colorScheme = useColorScheme() ?? 'light';
   const themeColors = Colors[colorScheme];
   const router = useRouter();
 
-  const [stage, setStage] = useState<'record' | 'process' | 'done'>('record');
-  const [isRecording, setIsRecording] = useState(false);
-  const [transcript, setTranscript] = useState("");
-  const [isSaveModalVisible, setIsSaveModalVisible] = useState(false); // ✅ Modal State
+  // 👇 2. GET THE CREATE FUNCTION
+  const { createFile } = useFileSystem();
 
-  // --- HANDLERS ---
-  const handleTranscribe = () => {
-    setStage('process');
+  const [stage, setStage] = useState<'record' | 'processing' | 'done'>('record');
+  const [recording, setRecording] = useState<Audio.Recording | null>(null);
+  const [permissionResponse, requestPermission] = Audio.usePermissions();
+  const [timer, setTimer] = useState(0);
+  const [audioUri, setAudioUri] = useState<string | null>(null);
+  const [transcript, setTranscript] = useState("");
+  const [isSaveModalVisible, setIsSaveModalVisible] = useState(false);
+
+  const timerInterval = useRef<any>(null);
+
+  useEffect(() => {
+    (async () => {
+      if (!permissionResponse) await requestPermission();
+    })();
+    return () => {
+      if (timerInterval.current) clearInterval(timerInterval.current);
+      if (recording) recording.stopAndUnloadAsync();
+    };
+  }, []);
+
+  const startRecording = async () => {
+    try {
+      if (permissionResponse?.status !== 'granted') await requestPermission();
+
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+
+      const { recording: newRecording } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY
+      );
+      
+      setRecording(newRecording);
+      setTimer(0);
+      timerInterval.current = setInterval(() => setTimer((prev) => prev + 1), 1000);
+    } catch (err) {
+      Alert.alert('Error', 'Could not start recording.');
+    }
+  };
+
+  const stopRecording = async () => {
+    if (!recording) return;
+    if (timerInterval.current) clearInterval(timerInterval.current);
+    setRecording(null); 
+    await recording.stopAndUnloadAsync();
+    const uri = recording.getURI();
+    setAudioUri(uri); 
+  };
+
+  const handleToggleRecord = async () => {
+    if (recording) {
+      await stopRecording();
+    } else {
+      await startRecording();
+    }
+  };
+
+  const handleTranscribe = async () => {
+    if (recording) await stopRecording();
+    setStage('processing');
     setTimeout(() => {
-        setTranscript("Lately, I've been thinking 'bout my precarious future...");
-        setStage('done');
+      setTranscript(""); 
+      setStage('done');
     }, 2000);
   };
 
-  const handleFinalSave = (fileName: string) => {
-    console.log("💾 ATTEMPTING SAVE:");
-    console.log("File Name:", fileName);
-    console.log("Content:", transcript);
-    
-    setIsSaveModalVisible(false);
-    // Future: Add logic here to write to file system/database
+  const handleRestart = async () => {
+    if (recording) await recording.stopAndUnloadAsync();
+    setRecording(null);
+    setAudioUri(null);
+    setTimer(0);
+    setTranscript("");
+    if (timerInterval.current) clearInterval(timerInterval.current);
+    setStage('record');
+  };
+
+  // 👇 3. REPLACED SAVE LOGIC
+  const handleFinalSave = async (fileName: string) => {
+    if (!audioUri) {
+      Alert.alert("Error", "No audio file found.");
+      return;
+    }
+
+    try {
+      const finalName = fileName.trim() || `Recording ${new Date().toLocaleTimeString()}`;
+
+      // A. Create Metadata in Context (Get a unique ID)
+      // Passing 'null' as folderId puts it in Root.
+      const newId = await createFile(finalName, null, "Voice Note");
+
+      // B. Determine Paths
+      const FS = FileSystem as any;
+      const rootDir = FS.documentDirectory || FS.cacheDirectory;
+      const recordingsFolder = rootDir + 'recordings/';
+      
+      // We rename the file to match the ID generated by the context
+      const destinationUri = recordingsFolder + newId + '.m4a';
+
+      // C. Ensure 'recordings' folder exists (Crucial step!)
+      const dirInfo = await FS.getInfoAsync(recordingsFolder);
+      if (!dirInfo.exists) {
+        await FS.makeDirectoryAsync(recordingsFolder, { intermediates: true });
+      }
+
+      // D. Move the temp file to the permanent location
+      await FileSystem.moveAsync({ 
+        from: audioUri, 
+        to: destinationUri 
+      });
+
+      // E. Cleanup & Navigate
+      setIsSaveModalVisible(false);
+      Alert.alert("Success", "Recording saved!", [
+        { text: "OK", onPress: () => router.replace('/(tabs)') } // Go back to Home
+      ]);
+
+    } catch (error) {
+      console.error(error);
+      Alert.alert("Error", "Failed to save file.");
+    }
   };
 
   return (
@@ -46,32 +159,31 @@ export default function RecordScreen() {
       <View style={styles.contentWrapper}>
         {stage === 'record' && (
           <RecordView 
-            isRecording={isRecording}
-            onToggleRecord={() => setIsRecording(!isRecording)}
-            onRestart={() => setIsRecording(false)}
+            isRecording={!!recording}
+            hasRecording={!!audioUri} 
+            recordingDuration={formatTime(timer)}
+            onToggleRecord={handleToggleRecord}
+            onRestart={handleRestart}
             onCancel={() => router.back()}
             onTranscribe={handleTranscribe}
+            onSave={() => setIsSaveModalVisible(true)} 
           />
         )}
 
-        {stage === 'process' && (
-          <ProcessingView 
-            onRestart={() => setStage('record')} 
-            onCancel={() => router.back()} 
-          />
+        {stage === 'processing' && (
+          <ProcessingView onRestart={handleRestart} onCancel={() => router.back()} />
         )}
 
         {stage === 'done' && (
           <ResultView 
             transcript={transcript}
-            onRestart={() => setStage('record')}
+            onRestart={handleRestart}
             onCancel={() => router.back()}
-            onSave={() => setIsSaveModalVisible(true)} // ✅ Trigger Modal
+            onSave={() => setIsSaveModalVisible(true)}
           />
         )}
       </View>
 
-      {/* ✅ SAVE MODAL OVERLAY */}
       <SaveModal 
         isVisible={isSaveModalVisible}
         onClose={() => setIsSaveModalVisible(false)}
